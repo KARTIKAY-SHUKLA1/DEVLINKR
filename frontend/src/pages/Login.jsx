@@ -11,7 +11,7 @@ const Login = () => {
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) navigate("/home");
-  }, []);
+  }, [navigate]);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -23,8 +23,13 @@ const Login = () => {
     try {
       const res = await axios.post("http://localhost:5000/api/auth/login", form);
       const { token, user } = res.data;
+
+      // ✅ Save full user info to localStorage
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
+
+      console.log("✅ Login successful. User stored:", user);
+
       setMessage("✅ Login successful!");
       setTimeout(() => navigate("/home"), 800);
     } catch (err) {

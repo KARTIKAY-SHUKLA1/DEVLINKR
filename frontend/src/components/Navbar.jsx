@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
+import axios from "axios";
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -7,17 +8,38 @@ const Navbar = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
 
+  const fetchNotificationCount = async () => {
+    const user = JSON.parse(localStorage.getItem("user"));
+    if (!user || !user.email) return;
+
+    try {
+      const res = await axios.get(`http://localhost:5000/api/auth/notifications?email=${user.email}`);
+      const newReqCount = res.data?.requests?.length || 0;
+
+      // Only update if changed
+      const prevCount = Number(localStorage.getItem("newNotifCount") || 0);
+      if (newReqCount !== prevCount) {
+        setNotifCount(newReqCount);
+        localStorage.setItem("newNotifCount", newReqCount.toString());
+      }
+    } catch (err) {
+      console.error("Notification fetch error:", err);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.clear();
     navigate("/login");
   };
 
   useEffect(() => {
-    // 👇 Check if notification count is stored
+    // Initial check
     const stored = localStorage.getItem("newNotifCount");
-    if (stored) {
-      setNotifCount(Number(stored));
-    }
+    if (stored) setNotifCount(Number(stored));
+
+    // Poll every 10s
+    const interval = setInterval(fetchNotificationCount, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   return (

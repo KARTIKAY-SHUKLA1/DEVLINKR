@@ -1,15 +1,12 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import Navbar from "../components/Navbar";
 import { motion } from "framer-motion";
-import { Link } from "react-router-dom";
 
 const UserMatch = () => {
   const user = JSON.parse(localStorage.getItem("user"));
   const [match, setMatch] = useState(null);
   const [status, setStatus] = useState("");
-  const [notifications, setNotifications] = useState([]);
-  const audioRef = useRef(null);
 
   const fetchMatch = async () => {
     setStatus("🔄 Finding...");
@@ -39,60 +36,22 @@ const UserMatch = () => {
     }
   };
 
-  const fetchNotifications = async () => {
-    try {
-      const res = await axios.get(
-        `http://localhost:5000/api/auth/notifications?email=${user.email}`
-      );
-
-      const reqs = res.data.requests || [];
-      const cons = res.data.connections || [];
-
-      const updated = reqs.map((r) => ({
-        email: r.email,
-        name: r.name,
-        type: "request",
-      })).concat(
-        cons.map((c) => ({
-          email: c.email,
-          name: c.name,
-          type: "accepted",
-        }))
-      );
-
-      setNotifications(updated);
-
-      if (updated.length > 0 && audioRef.current) {
-        audioRef.current.play().catch((e) => {
-          console.warn("Notification sound failed:", e);
-        });
-      }
-    } catch (err) {
-      console.error("Notification error:", err);
-    }
-  };
-
   useEffect(() => {
     fetchMatch();
-    fetchNotifications();
 
     const handleKeyDown = (e) => {
       if (e.key === "ArrowRight") fetchMatch();
     };
 
-    const interval = setInterval(fetchNotifications, 10000);
-
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      clearInterval(interval);
     };
   }, []);
 
   return (
     <>
       <Navbar />
-      <audio ref={audioRef} src="/notification.mp3" preload="auto" />
 
       <div className="min-h-screen bg-gradient-to-r from-indigo-100 to-purple-100 flex flex-col items-center justify-center px-4">
         <motion.div
@@ -168,34 +127,6 @@ const UserMatch = () => {
               ⏭️ Skip to Next Dev (or press →)
             </button>
           </div>
-
-          {notifications.length > 0 && (
-            <div className="mt-8 text-left">
-              <h3 className="text-lg font-bold mb-2 text-indigo-700">🔔 Notifications</h3>
-              <ul className="space-y-2">
-                {notifications.map((note, idx) => (
-                  <li
-                    key={idx}
-                    className="bg-indigo-50 border border-indigo-200 p-3 rounded-md shadow"
-                  >
-                    {note.type === "request" ? (
-                      <>
-                        📩 New connection request from{" "}
-                        <Link
-                          to={`/profile/${note.email}`}
-                          className="text-blue-600 hover:underline"
-                        >
-                          {note.name}
-                        </Link>
-                      </>
-                    ) : (
-                      <>✅ <strong>{note.name}</strong> accepted your request!</>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </motion.div>
       </div>
     </>

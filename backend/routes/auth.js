@@ -9,6 +9,7 @@ const fs = require("fs");
 const User = require("../models/user");
 const Otp = require("../models/otp");
 const sendOtp = require("../utils/sendOtp");
+const Message = require("../models/Message");
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -122,19 +123,19 @@ router.post("/signup", upload.single("profilePhoto"), async (req, res) => {
     const token = jwt.sign({ id: newUser._id }, JWT_SECRET, { expiresIn: "7d" });
 
     return res.json({
-      token,
-      user: {
-        name: newUser.name,
-        email: newUser.email,
-      },
-      redirectTo: "/home",
-    });
+  token,
+  user: {
+    name: newUser.name,
+    email: newUser.email,
+    profilePic: newUser.profilePic,
+  },
+  redirectTo: "/home",
+});
   } catch (err) {
     console.error("❌ Signup Error:", err);
     return res.status(500).json({ msg: "Server error during signup", error: err.message });
   }
 });
-
 // ------------------ POST /login ------------------
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
@@ -150,14 +151,26 @@ router.post("/login", async (req, res) => {
 
     res.json({
       token,
-      user: { name: user.name, email },
+      user: {
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        college: user.college,
+        company: user.company,
+        github: user.github,
+        experience: user.experience,
+        skills: user.skills,
+        interests: user.interests,
+        availability: user.availability,
+        bio: user.bio,
+        profilePic: user.profilePic || null,  // ✅ This is crucial
+      },
       redirectTo: "/home",
     });
   } catch (err) {
     res.status(500).json({ msg: "Server error" });
   }
 });
-
 // ------------------ PUT /profile ------------------
 router.put("/profile", upload.single("profilePic"), async (req, res) => {
   const {
@@ -268,7 +281,12 @@ router.get("/notifications", async (req, res) => {
 
     // Fetch details of connected users
     const connectionUsers = await User.find({ email: { $in: user.connections } });
-    const connections = connectionUsers.map(u => ({ email: u.email, name: u.name }));
+    const connections = connectionUsers.map(u => ({
+  email: u.email,
+  name: u.name,
+  profilePic: u.profilePic || "/uploads/default-profile.png"
+}));
+
 
     res.json({ requests, connections });
   } catch (err) {
@@ -276,7 +294,6 @@ router.get("/notifications", async (req, res) => {
     res.status(500).json({ msg: "Server error" });
   }
 });
-
 
 // ------------------ Dev Matching ------------------
 router.get("/match", async (req, res) => {
@@ -287,27 +304,40 @@ router.get("/match", async (req, res) => {
     const currentUser = await User.findOne({ email });
     if (!currentUser) return res.status(404).json({ msg: "User not found" });
 
-    const allUsers = await User.find({ email: { $ne: email } });
-
     const currentSkills = currentUser.skills || [];
     const currentInterests = currentUser.interests || [];
 
-    const scored = allUsers
-      .map((other) => {
-        const otherSkills = other.skills || [];
-        const otherInterests = other.interests || [];
+    // Collect emails to exclude: self, connections, sent requests, received requests
+    const excludeEmails = new Set([
+      currentUser.email,
+      ...currentUser.connections.map(String),
+      ...currentUser.connectionRequests.map(String),
+    ]);
 
-        const commonSkills = otherSkills.filter((s) => currentSkills.includes(s));
-        const commonInterests = otherInterests.filter((i) => currentInterests.includes(i));
+    // Also find users who sent requests TO current user
+    const incomingRequests = await User.find({ connectionRequests: email });
+    incomingRequests.forEach((u) => excludeEmails.add(u.email));
 
-        const score = commonSkills.length + commonInterests.length;
-        return { user: other, score };
-      });
+    // Get all users excluding those in excludeEmails
+    const allUsers = await User.find({ email: { $nin: Array.from(excludeEmails) } });
 
-    if (scored.length === 0) return res.status(404).json({ msg: "No suitable match found" });
+    const scored = allUsers.map((other) => {
+      const otherSkills = other.skills || [];
+      const otherInterests = other.interests || [];
 
-    const randomIndex = Math.floor(Math.random() * scored.length);
-    const bestMatch = scored[randomIndex].user;
+      const commonSkills = otherSkills.filter((s) => currentSkills.includes(s));
+      const commonInterests = otherInterests.filter((i) => currentInterests.includes(i));
+
+      const score = commonSkills.length + commonInterests.length;
+
+      return { user: other, score };
+    });
+
+    const validMatches = scored.filter((entry) => entry.score > 0);
+    if (validMatches.length === 0) return res.status(404).json({ msg: "No suitable match found" });
+
+    const randomIndex = Math.floor(Math.random() * validMatches.length);
+    const bestMatch = validMatches[randomIndex].user;
 
     res.json({
       name: bestMatch.name,
@@ -326,5 +356,74 @@ router.get("/match", async (req, res) => {
     res.status(500).json({ msg: "Server error" });
   }
 });
+// 🔸 Send a new message
+router.post("/send-message", async (req, res) => {
+  try {
+    const { sender, receiver, message } = req.body;
+
+    if (!sender || !receiver || !message) {
+      return res.status(400).json({ msg: "Missing required fields" });
+    }
+
+    const newMsg = await Message.create({
+      sender,
+      receiver,
+      message,
+      status: "sent", // Default when created
+    });
+
+    res.status(201).json(newMsg);
+  } catch (err) {
+    console.error("❌ Error sending message:", err);
+    res.status(500).json({ msg: "Server error while sending message" });
+  }
+});
+
+
+// 🔹 Get chat history between two users
+router.get("/chat-history", async (req, res) => {
+  const { user1, user2 } = req.query;
+
+  if (!user1 || !user2) {
+    return res.status(400).json({ msg: "Missing user emails" });
+  }
+
+  try {
+    const messages = await Message.find({
+      $or: [
+        { sender: user1, receiver: user2 },
+        { sender: user2, receiver: user1 },
+      ],
+    }).sort({ createdAt: 1 }); // ascending order
+
+    res.json(messages);
+  } catch (err) {
+    console.error("Fetch chat history error:", err);
+    res.status(500).json({ msg: "Server error" });
+  }
+});
+// ✅ Mark messages as seen
+router.post("/mark-seen", async (req, res) => {
+  const { sender, receiver } = req.body;
+
+  if (!sender || !receiver) {
+    return res.status(400).json({ msg: "Missing sender or receiver" });
+  }
+
+  try {
+    // Update all unread messages from sender to receiver
+    await Message.updateMany(
+      { sender, receiver, status: { $ne: "seen" } },
+      { $set: { status: "seen" } }
+    );
+
+    res.json({ msg: "Messages marked as seen" });
+  } catch (err) {
+    console.error("Error marking messages as seen:", err);
+    res.status(500).json({ msg: "Server error" });
+  }
+});
+
+
 
 module.exports = router;

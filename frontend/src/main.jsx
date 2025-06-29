@@ -10,9 +10,9 @@ import Profile from './pages/Profile.jsx';              // View/Edit Profile
 import UserMatch from './pages/UserMatch.jsx';          // Dev Matching Page
 import HomeDashboard from './pages/HomeDashboard.jsx';  // Post-login Landing Page
 import Notifications from './pages/Notifications.jsx';
-import About from "./pages/About";
-import ProfileView from "./pages/ProfileView"; // 👈 import it
-
+import About from "./pages/About.jsx";
+import ProfileView from "./pages/ProfileView.jsx"; // 👈 import it
+import DevChat from "./pages/DevChat.jsx";
 // Auth
 import PrivateRoute from './components/PrivateRoute.jsx';
 
@@ -30,6 +30,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/about" element={<About />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/profile/:email" element={<ProfileView />} />
+        <Route path="/chat" element={<DevChat />} />
 
         {/* 🔐 Protected Routes */}
         <Route
