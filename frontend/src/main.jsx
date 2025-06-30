@@ -3,16 +3,18 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 // Pages
-import Home from './pages/Home.jsx';                    // Landing page
-import SignupFlow from './pages/SignupFlow.jsx';        // Signup with OTP + Profile setup
-import Login from './pages/Login.jsx';                  // Login
-import Profile from './pages/Profile.jsx';              // View/Edit Profile
-import UserMatch from './pages/UserMatch.jsx';          // Dev Matching Page
-import HomeDashboard from './pages/HomeDashboard.jsx';  // Post-login Landing Page
+import Home from './pages/Home.jsx';
+import SignupFlow from './pages/SignupFlow.jsx';
+import Login from './pages/Login.jsx';
+import Profile from './pages/Profile.jsx';
+import UserMatch from './pages/UserMatch.jsx';
+import HomeDashboard from './pages/HomeDashboard.jsx';
 import Notifications from './pages/Notifications.jsx';
 import About from "./pages/About.jsx";
-import ProfileView from "./pages/ProfileView.jsx"; // 👈 import it
+import ProfileView from "./pages/ProfileView.jsx";
 import DevChat from "./pages/DevChat.jsx";
+import PairProgramming from "./pages/PairProgramming.jsx"; // ✅ NEW PAGE
+
 // Auth
 import PrivateRoute from './components/PrivateRoute.jsx';
 
@@ -32,6 +34,16 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/profile/:email" element={<ProfileView />} />
         <Route path="/chat" element={<DevChat />} />
 
+        {/* Pair Programming - 🔐 Protected */}
+        <Route
+          path="/pair"
+          element={
+            <PrivateRoute>
+              <PairProgramming />
+            </PrivateRoute>
+          }
+        />
+
         {/* 🔐 Protected Routes */}
         <Route
           path="/home"
@@ -42,7 +54,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           }
         />
         <Route
-          path="/connect"  // ✅ Changed from /dashboard to /connect
+          path="/connect"
           element={
             <PrivateRoute>
               <UserMatch />

@@ -15,7 +15,7 @@ const server = http.createServer(app);
 // Initialize Socket.IO
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173", // 🔗 Your frontend origin
+    origin: "http://localhost:5173",
     methods: ["GET", "POST"],
   },
 });
@@ -27,16 +27,15 @@ const connectedUsers = new Map();
 io.on("connection", (socket) => {
   console.log("🟢 Socket connected:", socket.id);
 
-  // ✅ Register user with their email
+  // ✅ Register user with email
   socket.on("register", (email) => {
     connectedUsers.set(email, socket.id);
     console.log("✅ Registered user:", email);
 
-    // 🔁 Notify all clients of online users
     io.emit("onlineUsers", Array.from(connectedUsers.keys()));
   });
 
-  // ✅ Typing Indicator (Optional: frontend can emit 'typing')
+  // ✅ Typing indicator
   socket.on("typing", (receiverEmail) => {
     const receiverSocket = connectedUsers.get(receiverEmail);
     if (receiverSocket) {
@@ -46,13 +45,12 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ✅ Real-time message delivery with "delivered" status
+  // ✅ Real-time message delivery with status
   socket.on("sendMessage", async ({ to, messageData }) => {
     const receiverSocket = connectedUsers.get(to);
 
     if (receiverSocket) {
       try {
-        // Mark message as delivered in DB
         await Message.findOneAndUpdate(
           {
             sender: messageData.sender,
@@ -78,23 +76,31 @@ io.on("connection", (socket) => {
 
   // ✅ Seen status
   socket.on("markSeen", async ({ sender, receiver }) => {
-  try {
-    await Message.updateMany(
-      { sender, receiver, status: { $ne: "seen" } },
-      { $set: { status: "seen" } }
-    );
+    try {
+      await Message.updateMany(
+        { sender, receiver, status: { $ne: "seen" } },
+        { $set: { status: "seen" } }
+      );
 
-    // 🔁 Notify sender to update status on their frontend (optional)
-    const senderSocketId = onlineUsers[sender]; // Assuming you track online users like: { email: socket.id }
-    if (senderSocketId) {
-      io.to(senderSocketId).emit("statusUpdated", { sender, receiver });
+      const senderSocketId = connectedUsers.get(sender);
+      if (senderSocketId) {
+        io.to(senderSocketId).emit("statusUpdated", { sender, receiver });
+      }
+    } catch (err) {
+      console.log("Error marking seen:", err);
     }
+  });
 
-  } catch (err) {
-    console.log("Error marking seen:", err);
-  }
-});
+  // ✅ Real-time Pair Programming: join room
+  socket.on("joinRoom", (room) => {
+    socket.join(room);
+    console.log(`🛠️ ${socket.id} joined pair programming room: ${room}`);
+  });
 
+  // ✅ Real-time Pair Programming: code update
+  socket.on("codeUpdate", ({ room, code }) => {
+    socket.to(room).emit("codeUpdate", code); // broadcast to others in the room
+  });
 
   // ✅ Cleanup on disconnect
   socket.on("disconnect", () => {
@@ -106,7 +112,6 @@ io.on("connection", (socket) => {
       }
     }
 
-    // 🔁 Update online users for all clients
     io.emit("onlineUsers", Array.from(connectedUsers.keys()));
   });
 });
@@ -120,7 +125,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 const authRoutes = require("./routes/auth");
 app.use("/api/auth", authRoutes);
 
-// DB Connection
+// MongoDB connection
 const MONGO_URI = process.env.MONGO_URI;
 if (!MONGO_URI) {
   console.error("❌ MONGO_URI missing in .env");

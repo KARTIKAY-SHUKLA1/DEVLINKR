@@ -10,25 +10,32 @@ const User = require("../models/user");
 const Otp = require("../models/otp");
 const sendOtp = require("../utils/sendOtp");
 const Message = require("../models/Message");
+const Session = require("../models/Session"); // 👈 for saving pair programming sessions
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// Ensure uploads directory exists
+// ------------------ Ensure Upload Directories Exist ------------------
 if (!fs.existsSync("uploads")) fs.mkdirSync("uploads");
+const chatUploadPath = path.join("uploads", "chat");
+if (!fs.existsSync(chatUploadPath)) fs.mkdirSync(chatUploadPath, { recursive: true });
 
 // ------------------ MULTER SETUP ------------------
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads/"),
+  destination: (req, file, cb) => {
+    const isChatUpload = req.originalUrl.includes("upload-file");
+    const dest = isChatUpload ? "uploads/chat/" : "uploads/";
+    cb(null, dest);
+  },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
-    const name = file.originalname.split(".")[0];
+    const name = file.originalname.split(".")[0].replace(/\s+/g, "_");
     cb(null, `${name}-${Date.now()}${ext}`);
   },
 });
 const upload = multer({ storage });
 
-// ------------------ POST /send-otp ------------------
+// ------------------ OTP Routes ------------------
 router.post("/send-otp", async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ msg: "Email is required" });
@@ -49,7 +56,6 @@ router.post("/send-otp", async (req, res) => {
   }
 });
 
-// ------------------ POST /verify-otp ------------------
 router.post("/verify-otp", async (req, res) => {
   try {
     let { email, code } = req.body;
@@ -74,7 +80,7 @@ router.post("/verify-otp", async (req, res) => {
   }
 });
 
-// ------------------ POST /signup ------------------
+// ------------------ Signup/Login/Profile ------------------
 router.post("/signup", upload.single("profilePhoto"), async (req, res) => {
   try {
     const {
@@ -123,20 +129,20 @@ router.post("/signup", upload.single("profilePhoto"), async (req, res) => {
     const token = jwt.sign({ id: newUser._id }, JWT_SECRET, { expiresIn: "7d" });
 
     return res.json({
-  token,
-  user: {
-    name: newUser.name,
-    email: newUser.email,
-    profilePic: newUser.profilePic,
-  },
-  redirectTo: "/home",
-});
+      token,
+      user: {
+        name: newUser.name,
+        email: newUser.email,
+        profilePic: newUser.profilePic,
+      },
+      redirectTo: "/home",
+    });
   } catch (err) {
     console.error("❌ Signup Error:", err);
     return res.status(500).json({ msg: "Server error during signup", error: err.message });
   }
 });
-// ------------------ POST /login ------------------
+
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
@@ -163,7 +169,7 @@ router.post("/login", async (req, res) => {
         interests: user.interests,
         availability: user.availability,
         bio: user.bio,
-        profilePic: user.profilePic || null,  // ✅ This is crucial
+        profilePic: user.profilePic || null,
       },
       redirectTo: "/home",
     });
@@ -171,7 +177,7 @@ router.post("/login", async (req, res) => {
     res.status(500).json({ msg: "Server error" });
   }
 });
-// ------------------ PUT /profile ------------------
+
 router.put("/profile", upload.single("profilePic"), async (req, res) => {
   const {
     email,
@@ -193,10 +199,7 @@ router.put("/profile", upload.single("profilePic"), async (req, res) => {
     if (experience) user.experience = experience;
     if (github) user.github = github;
     if (bio) user.bio = bio;
-
-    if (req.file) {
-      user.profilePic = `/uploads/${req.file.filename}`;
-    }
+    if (req.file) user.profilePic = `/uploads/${req.file.filename}`;
 
     await user.save();
     res.json({ msg: "✅ Profile updated", profilePic: user.profilePic });
@@ -206,7 +209,6 @@ router.put("/profile", upload.single("profilePic"), async (req, res) => {
   }
 });
 
-// ------------------ GET /profile ------------------
 router.get("/profile", async (req, res) => {
   const { email } = req.query;
 
@@ -221,12 +223,9 @@ router.get("/profile", async (req, res) => {
   }
 });
 
-
 // ------------------ Connection System ------------------
 router.post("/connect-request", async (req, res) => {
   const { from, to } = req.body;
-
-  if (!from || !to) return res.status(400).json({ msg: "Missing fields" });
 
   try {
     const receiver = await User.findOne({ email: to });
@@ -239,7 +238,6 @@ router.post("/connect-request", async (req, res) => {
 
     res.json({ msg: "✅ Request sent" });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ msg: "Server error" });
   }
 });
@@ -255,7 +253,6 @@ router.post("/accept-request", async (req, res) => {
 
     receiver.connections.push(from);
     sender.connections.push(to);
-
     receiver.connectionRequests = receiver.connectionRequests.filter((e) => e !== from);
 
     await receiver.save();
@@ -263,7 +260,6 @@ router.post("/accept-request", async (req, res) => {
 
     res.json({ msg: "✅ Connected" });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ msg: "Server error" });
   }
 });
@@ -275,22 +271,18 @@ router.get("/notifications", async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ msg: "User not found" });
 
-    // Fetch details of users who sent connection requests
     const requestUsers = await User.find({ email: { $in: user.connectionRequests } });
     const requests = requestUsers.map(u => ({ email: u.email, name: u.name }));
 
-    // Fetch details of connected users
     const connectionUsers = await User.find({ email: { $in: user.connections } });
     const connections = connectionUsers.map(u => ({
-  email: u.email,
-  name: u.name,
-  profilePic: u.profilePic || "/uploads/default-profile.png"
-}));
-
+      email: u.email,
+      name: u.name,
+      profilePic: u.profilePic || "/uploads/default-profile.png"
+    }));
 
     res.json({ requests, connections });
   } catch (err) {
-    console.error("Notification fetch error:", err);
     res.status(500).json({ msg: "Server error" });
   }
 });
@@ -298,46 +290,31 @@ router.get("/notifications", async (req, res) => {
 // ------------------ Dev Matching ------------------
 router.get("/match", async (req, res) => {
   const { email } = req.query;
-  if (!email) return res.status(400).json({ msg: "Missing email" });
-
   try {
     const currentUser = await User.findOne({ email });
     if (!currentUser) return res.status(404).json({ msg: "User not found" });
 
-    const currentSkills = currentUser.skills || [];
-    const currentInterests = currentUser.interests || [];
-
-    // Collect emails to exclude: self, connections, sent requests, received requests
-    const excludeEmails = new Set([
+    const exclude = new Set([
       currentUser.email,
-      ...currentUser.connections.map(String),
-      ...currentUser.connectionRequests.map(String),
+      ...currentUser.connections,
+      ...currentUser.connectionRequests,
     ]);
 
-    // Also find users who sent requests TO current user
     const incomingRequests = await User.find({ connectionRequests: email });
-    incomingRequests.forEach((u) => excludeEmails.add(u.email));
+    incomingRequests.forEach(u => exclude.add(u.email));
 
-    // Get all users excluding those in excludeEmails
-    const allUsers = await User.find({ email: { $nin: Array.from(excludeEmails) } });
+    const others = await User.find({ email: { $nin: [...exclude] } });
+    const matches = others
+      .map(user => {
+        const skillMatch = user.skills?.filter(s => currentUser.skills.includes(s)).length || 0;
+        const interestMatch = user.interests?.filter(i => currentUser.interests.includes(i)).length || 0;
+        return { user, score: skillMatch + interestMatch };
+      })
+      .filter(e => e.score > 0);
 
-    const scored = allUsers.map((other) => {
-      const otherSkills = other.skills || [];
-      const otherInterests = other.interests || [];
+    if (matches.length === 0) return res.status(404).json({ msg: "No suitable match found" });
 
-      const commonSkills = otherSkills.filter((s) => currentSkills.includes(s));
-      const commonInterests = otherInterests.filter((i) => currentInterests.includes(i));
-
-      const score = commonSkills.length + commonInterests.length;
-
-      return { user: other, score };
-    });
-
-    const validMatches = scored.filter((entry) => entry.score > 0);
-    if (validMatches.length === 0) return res.status(404).json({ msg: "No suitable match found" });
-
-    const randomIndex = Math.floor(Math.random() * validMatches.length);
-    const bestMatch = validMatches[randomIndex].user;
+    const bestMatch = matches[Math.floor(Math.random() * matches.length)].user;
 
     res.json({
       name: bestMatch.name,
@@ -352,15 +329,15 @@ router.get("/match", async (req, res) => {
       profilePic: bestMatch.profilePic || null,
     });
   } catch (err) {
-    console.error("Match error:", err);
     res.status(500).json({ msg: "Server error" });
   }
 });
-// 🔸 Send a new message
-router.post("/send-message", async (req, res) => {
-  try {
-    const { sender, receiver, message } = req.body;
 
+// ------------------ Dev Chat ------------------
+router.post("/send-message", async (req, res) => {
+  const { sender, receiver, message } = req.body;
+
+  try {
     if (!sender || !receiver || !message) {
       return res.status(400).json({ msg: "Missing required fields" });
     }
@@ -369,24 +346,17 @@ router.post("/send-message", async (req, res) => {
       sender,
       receiver,
       message,
-      status: "sent", // Default when created
+      status: "sent",
     });
 
     res.status(201).json(newMsg);
   } catch (err) {
-    console.error("❌ Error sending message:", err);
     res.status(500).json({ msg: "Server error while sending message" });
   }
 });
 
-
-// 🔹 Get chat history between two users
 router.get("/chat-history", async (req, res) => {
   const { user1, user2 } = req.query;
-
-  if (!user1 || !user2) {
-    return res.status(400).json({ msg: "Missing user emails" });
-  }
 
   try {
     const messages = await Message.find({
@@ -394,24 +364,18 @@ router.get("/chat-history", async (req, res) => {
         { sender: user1, receiver: user2 },
         { sender: user2, receiver: user1 },
       ],
-    }).sort({ createdAt: 1 }); // ascending order
+    }).sort({ createdAt: 1 });
 
     res.json(messages);
   } catch (err) {
-    console.error("Fetch chat history error:", err);
     res.status(500).json({ msg: "Server error" });
   }
 });
-// ✅ Mark messages as seen
+
 router.post("/mark-seen", async (req, res) => {
   const { sender, receiver } = req.body;
 
-  if (!sender || !receiver) {
-    return res.status(400).json({ msg: "Missing sender or receiver" });
-  }
-
   try {
-    // Update all unread messages from sender to receiver
     await Message.updateMany(
       { sender, receiver, status: { $ne: "seen" } },
       { $set: { status: "seen" } }
@@ -419,11 +383,68 @@ router.post("/mark-seen", async (req, res) => {
 
     res.json({ msg: "Messages marked as seen" });
   } catch (err) {
-    console.error("Error marking messages as seen:", err);
     res.status(500).json({ msg: "Server error" });
   }
 });
 
+// ------------------ File Upload for Chat ------------------
+router.post("/upload-file", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ msg: "No file uploaded" });
+    }
+
+    const fileUrl = `/uploads/chat/${req.file.filename}`;
+    const fileType = req.file.mimetype;
+
+    res.status(200).json({ url: fileUrl, type: fileType });
+  } catch (err) {
+    console.error("❌ File upload error:", err);
+    res.status(500).json({ msg: "Server error during file upload" });
+  }
+});
+// ------------------ Save Pair Programming Session ------------------
+router.post("/save-session", async (req, res) => {
+  const { room, code, language } = req.body;
+
+  if (!room || !code) {
+    return res.status(400).json({ msg: "Missing room or code" });
+  }
+
+  try {
+    const session = await Session.findOneAndUpdate(
+      { room },
+      { code, language },
+      { upsert: true, new: true }
+    );
+
+    res.json({ msg: "✅ Session saved", session });
+  } catch (err) {
+    console.error("❌ Error saving session:", err);
+    res.status(500).json({ msg: "Server error" });
+  }
+});
+// ✅ Load saved session content by room
+router.get("/load-session", async (req, res) => {
+  const { room } = req.query;
+
+  try {
+    if (!room) return res.status(400).json({ msg: "Room ID missing" });
+
+    const Session = require("../models/Session");
+    const saved = await Session.findOne({ room });
+
+    if (!saved) return res.status(404).json({ msg: "No saved session found" });
+
+    res.json({
+      code: saved.code,
+      language: saved.language,
+    });
+  } catch (err) {
+    console.error("❌ Error loading session:", err);
+    res.status(500).json({ msg: "Server error while loading session" });
+  }
+});
 
 
 module.exports = router;
