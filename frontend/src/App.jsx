@@ -1,23 +1,37 @@
 import Navbar from "./components/Navbar";
+import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 
 function App() {
+  const navigate = useNavigate();
+
   return (
     <>
       <Navbar />
       <main className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-blue-50 to-white px-4 text-center">
-        {/* 🚀 Logo from public */}
-        <img
+        {/* 🚀 Logo with animation */}
+        <motion.img
           src="/logo.png"
-          alt="DevMeet Logo"
+          alt="DevLinkr Logo"
           className="w-24 h-24 mb-4 rounded-full shadow-md"
+          initial={{ scale: 0, rotate: 180 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ duration: 0.6, type: "spring" }}
         />
 
         {/* 🔥 Title */}
-        <h1 className="text-5xl font-bold mb-4 text-blue-700">Welcome to DevMeet</h1>
+        <motion.h1
+          className="text-5xl font-bold mb-4 text-blue-700"
+          initial={{ opacity: 0, y: -40 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          Welcome to DevLinkr
+        </motion.h1>
 
         {/* 🧠 Description */}
         <p className="text-lg text-gray-700 max-w-xl mb-8">
-          DevMeet is a platform to help developers connect for pair programming, real-time chat,
+          DevLinkr is a platform to help developers connect for pair programming, real-time chat,
           and tech collaboration. Whether you're a student or professional, find your coding buddy here.
         </p>
 

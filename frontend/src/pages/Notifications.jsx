@@ -17,7 +17,6 @@ const Notifications = () => {
       setRequests(reqs);
       setConnections(cons);
 
-      // ✅ Save request count for Navbar badge
       localStorage.setItem("newNotifCount", reqs.length.toString());
     } catch (err) {
       console.error("Notification fetch error:", err);
@@ -30,7 +29,7 @@ const Notifications = () => {
         from: fromEmail,
         to: user.email,
       });
-      fetchNotifications(); // Refresh after accepting
+      fetchNotifications();
     } catch (err) {
       console.error("Accept error:", err);
     }
@@ -38,67 +37,74 @@ const Notifications = () => {
 
   useEffect(() => {
     fetchNotifications();
-
-    // ✅ Reset notification count in Navbar
     localStorage.setItem("newNotifCount", "0");
   }, []);
 
   return (
     <>
       <Navbar />
-      <div className="min-h-screen bg-gray-100 py-10 px-4">
-        <div className="max-w-3xl mx-auto bg-white shadow-lg rounded-xl p-8">
-          <h2 className="text-2xl font-bold text-indigo-700 mb-6">🔔 Notifications</h2>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-10 px-4">
+        <div className="max-w-3xl mx-auto bg-white shadow-xl rounded-2xl p-6 md:p-10">
+          <h2 className="text-2xl md:text-3xl font-bold text-indigo-700 mb-6 flex items-center gap-2">
+            🔔 DevLinkr Notifications
+          </h2>
 
-          {/* Incoming Requests */}
-          <div className="mb-8">
-            <h3 className="text-lg font-semibold mb-2 text-gray-800">Incoming Connection Requests:</h3>
+          <div className="mb-10">
+            <h3 className="text-lg md:text-xl font-semibold mb-4 text-gray-800">
+              Incoming Connection Requests
+            </h3>
             {requests.length === 0 ? (
-              <p className="text-gray-500">No new requests</p>
+              <div className="text-gray-500 italic">✨ No new requests at the moment</div>
             ) : (
-              requests.map((req) => (
-                <div
-                  key={req.email}
-                  className="flex items-center justify-between bg-indigo-50 p-3 rounded-lg mb-2"
-                >
-                  <Link
-                    to={`/profile/${req.email}`}
-                    className="text-blue-700 font-medium underline hover:text-blue-900"
+              <div className="space-y-4">
+                {requests.map((req) => (
+                  <div
+                    key={req.email}
+                    className="flex items-center justify-between bg-indigo-50 border border-indigo-100 rounded-xl p-4 shadow-sm hover:shadow-md transition"
                   >
-                    {req.name}
-                  </Link>
-                  <button
-                    onClick={() => handleAccept(req.email)}
-                    className="bg-green-600 text-white px-4 py-1 rounded hover:bg-green-700"
-                  >
-                    ✅ Accept
-                  </button>
-                </div>
-              ))
+                    <Link to={`/profile/${req.email}`} className="flex items-center gap-3">
+                      <img
+                        src={req.profilePic ? req.profilePic : "/default-profile.png"}
+                        alt={req.name}
+                        className="w-10 h-10 rounded-full object-cover border border-indigo-200"
+                      />
+                      <span className="text-indigo-800 font-medium hover:underline">{req.name}</span>
+                    </Link>
+                    <button
+                      onClick={() => handleAccept(req.email)}
+                      className="flex items-center gap-1 bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition text-sm"
+                    >
+                      ✅ Accept
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
-          {/* Connections */}
           <div>
-            <h3 className="text-lg font-semibold mb-2 text-gray-800">Your Connections:</h3>
+            <h3 className="text-lg md:text-xl font-semibold mb-4 text-gray-800">
+              Your DevLinkr Connections
+            </h3>
             {connections.length === 0 ? (
-              <p className="text-gray-500">You have no connections yet</p>
+              <div className="text-gray-500 italic">You have no connections yet. Start connecting!</div>
             ) : (
-              <ul className="space-y-1">
+              <div className="space-y-3">
                 {connections.map((conn) => (
-                  <li
+                  <Link
+                    to={`/profile/${conn.email}`}
                     key={conn.email}
-                    className="text-gray-700 bg-gray-100 px-4 py-2 rounded"
+                    className="flex items-center gap-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 p-3 rounded-xl shadow-sm transition"
                   >
-                    <Link
-                      to={`/profile/${conn.email}`}
-                      className="text-blue-700 font-medium underline hover:text-blue-900"
-                    >
-                      {conn.name}
-                    </Link>
-                  </li>
+                    <img
+                      src={conn.profilePic ? conn.profilePic : "/default-profile.png"}
+                      alt={conn.name}
+                      className="w-9 h-9 rounded-full object-cover border"
+                    />
+                    <span className="text-gray-800 font-medium">{conn.name}</span>
+                  </Link>
                 ))}
-              </ul>
+              </div>
             )}
           </div>
         </div>

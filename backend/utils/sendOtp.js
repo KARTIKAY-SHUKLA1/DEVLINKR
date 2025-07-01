@@ -12,8 +12,8 @@ async function sendOtp(email, otp) {
   await transporter.sendMail({
     from: process.env.EMAIL_USER,
     to: email,
-    subject: "DevMeet OTP",
-    text: `Your OTP is ${otp}. It expires in 5 minutes.`,
+    subject: "DevLinkr OTP",
+    text: `Your OTP for DevLinkr is ${otp}. It expires in 5 minutes.`,
   });
 }
 

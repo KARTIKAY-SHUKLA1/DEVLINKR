@@ -13,7 +13,7 @@ import Notifications from './pages/Notifications.jsx';
 import About from "./pages/About.jsx";
 import ProfileView from "./pages/ProfileView.jsx";
 import DevChat from "./pages/DevChat.jsx";
-import PairProgramming from "./pages/PairProgramming.jsx"; // ✅ NEW PAGE
+import PairProgramming from "./pages/PairProgramming.jsx"; // ✅ DevLinkr Pair Programming
 
 // Auth
 import PrivateRoute from './components/PrivateRoute.jsx';
@@ -25,7 +25,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <Routes>
-        {/* 🔓 Public Routes */}
+        {/* 🔓 DevLinkr Public Routes */}
         <Route path="/" element={<Home />} />
         <Route path="/signup" element={<SignupFlow />} />
         <Route path="/login" element={<Login />} />
@@ -34,7 +34,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/profile/:email" element={<ProfileView />} />
         <Route path="/chat" element={<DevChat />} />
 
-        {/* Pair Programming - 🔐 Protected */}
+        {/* 👯 DevLinkr Pair Programming - 🔐 Protected */}
         <Route
           path="/pair"
           element={
@@ -44,7 +44,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           }
         />
 
-        {/* 🔐 Protected Routes */}
+        {/* 🔐 DevLinkr Protected Routes */}
         <Route
           path="/home"
           element={

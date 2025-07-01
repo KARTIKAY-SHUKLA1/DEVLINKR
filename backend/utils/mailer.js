@@ -13,8 +13,8 @@ const sendOTP = async (toEmail, otp) => {
   const mailOptions = {
     from: process.env.EMAIL_USER,
     to: toEmail,
-    subject: "Your DevMeet OTP Verification Code",
-    html: `<h2>🔐 DevMeet Verification</h2>
+    subject: "Your DevLinkr OTP Verification Code",
+    html: `<h2>🔐 DevLinkr Verification</h2>
            <p>Your OTP is: <strong>${otp}</strong></p>
            <p>This code is valid for 10 minutes.</p>`,
   };

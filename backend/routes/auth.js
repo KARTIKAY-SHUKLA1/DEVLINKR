@@ -2,57 +2,45 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
-const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
+
+const upload = require("../utils/cloudinaryUpload");  // ✅ Your Cloudinary multer
 
 const User = require("../models/user");
 const Otp = require("../models/otp");
 const sendOtp = require("../utils/sendOtp");
 const Message = require("../models/Message");
-const Session = require("../models/Session"); // 👈 for saving pair programming sessions
+const Session = require("../models/Session");
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// ------------------ Ensure Upload Directories Exist ------------------
-if (!fs.existsSync("uploads")) fs.mkdirSync("uploads");
-const chatUploadPath = path.join("uploads", "chat");
-if (!fs.existsSync(chatUploadPath)) fs.mkdirSync(chatUploadPath, { recursive: true });
-
-// ------------------ MULTER SETUP ------------------
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const isChatUpload = req.originalUrl.includes("upload-file");
-    const dest = isChatUpload ? "uploads/chat/" : "uploads/";
-    cb(null, dest);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const name = file.originalname.split(".")[0].replace(/\s+/g, "_");
-    cb(null, `${name}-${Date.now()}${ext}`);
-  },
-});
-const upload = multer({ storage });
-
 // ------------------ OTP Routes ------------------
 router.post("/send-otp", async (req, res) => {
-  const { email } = req.body;
+  let { email } = req.body;
   if (!email) return res.status(400).json({ msg: "Email is required" });
 
-  const otpCode = crypto.randomInt(100000, 999999).toString();
+  email = email.trim().toLowerCase();
 
   try {
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ msg: "❗ You already have an account. Please login instead." });
+    }
+
+    const otpCode = crypto.randomInt(100000, 999999).toString();
+
     await Otp.findOneAndUpdate(
       { email },
       { code: otpCode, expiresAt: new Date(Date.now() + 5 * 60 * 1000) },
       { upsert: true, new: true }
     );
+
     await sendOtp(email, otpCode);
-    res.json({ msg: "✅ OTP sent to your email" });
+
+    return res.json({ msg: "✅ OTP sent to your email" });
   } catch (err) {
     console.error("❌ Error sending OTP:", err);
-    res.status(500).json({ msg: "❌ Failed to send OTP" });
+    return res.status(500).json({ msg: "❌ Failed to send OTP", error: err.message });
   }
 });
 
@@ -80,10 +68,10 @@ router.post("/verify-otp", async (req, res) => {
   }
 });
 
-// ------------------ Signup/Login/Profile ------------------
+// ------------------ Signup ------------------
 router.post("/signup", upload.single("profilePhoto"), async (req, res) => {
   try {
-    const {
+    let {
       name,
       email,
       password,
@@ -94,6 +82,8 @@ router.post("/signup", upload.single("profilePhoto"), async (req, res) => {
       experience,
       remark,
     } = req.body;
+
+    email = email.trim().toLowerCase();
 
     const skills = Array.isArray(req.body.skills)
       ? req.body.skills.map((s) => s.trim())
@@ -106,7 +96,9 @@ router.post("/signup", upload.single("profilePhoto"), async (req, res) => {
     }
 
     const existing = await User.findOne({ email });
-    if (existing) return res.status(400).json({ msg: "User already exists" });
+    if (existing) {
+      return res.status(400).json({ msg: "❗ Account already exists. Please login." });
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -121,7 +113,7 @@ router.post("/signup", upload.single("profilePhoto"), async (req, res) => {
       experience,
       remark,
       skills,
-      profilePic: req.file ? `/uploads/${req.file.filename}` : undefined,
+      profilePic: req.file ? req.file.path : undefined,  // ✅ Cloudinary URL
     });
 
     await newUser.save();
@@ -139,10 +131,14 @@ router.post("/signup", upload.single("profilePhoto"), async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Signup Error:", err);
-    return res.status(500).json({ msg: "Server error during signup", error: err.message });
+    return res.status(500).json({
+      msg: "Server error during signup",
+      error: err.message,
+    });
   }
 });
 
+// ------------------ Login ------------------
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
@@ -178,6 +174,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
+// ------------------ Profile Update ------------------
 router.put("/profile", upload.single("profilePic"), async (req, res) => {
   const {
     email,
@@ -199,7 +196,7 @@ router.put("/profile", upload.single("profilePic"), async (req, res) => {
     if (experience) user.experience = experience;
     if (github) user.github = github;
     if (bio) user.bio = bio;
-    if (req.file) user.profilePic = `/uploads/${req.file.filename}`;
+    if (req.file) user.profilePic = req.file.path;
 
     await user.save();
     res.json({ msg: "✅ Profile updated", profilePic: user.profilePic });
@@ -209,6 +206,7 @@ router.put("/profile", upload.single("profilePic"), async (req, res) => {
   }
 });
 
+// ------------------ Get Profile ------------------
 router.get("/profile", async (req, res) => {
   const { email } = req.query;
 
@@ -220,6 +218,20 @@ router.get("/profile", async (req, res) => {
   } catch (err) {
     console.error("Profile fetch error:", err);
     res.status(500).json({ msg: "Server error" });
+  }
+});
+
+// ------------------ File Upload for Chat ------------------
+router.post("/upload-file", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ msg: "No file uploaded" });
+    }
+
+    res.status(200).json({ url: req.file.path, type: req.file.mimetype });
+  } catch (err) {
+    console.error("❌ File upload error:", err);
+    res.status(500).json({ msg: "Server error during file upload" });
   }
 });
 
@@ -267,27 +279,42 @@ router.post("/accept-request", async (req, res) => {
 router.get("/notifications", async (req, res) => {
   const { email } = req.query;
 
+  if (!email) {
+    return res.status(400).json({ msg: "Email is required" });
+  }
+
   try {
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).lean();
     if (!user) return res.status(404).json({ msg: "User not found" });
 
-    const requestUsers = await User.find({ email: { $in: user.connectionRequests } });
-    const requests = requestUsers.map(u => ({ email: u.email, name: u.name }));
+    // Get connection requests
+    const requestUsers = await User.find({
+      email: { $in: user.connectionRequests || [] },
+    }).lean();
 
-    const connectionUsers = await User.find({ email: { $in: user.connections } });
+    const requests = requestUsers.map(u => ({
+      email: u.email,
+      name: u.name,
+    }));
+
+    // Get current connections
+    const connectionUsers = await User.find({
+      email: { $in: user.connections || [] },
+    }).lean();
+
     const connections = connectionUsers.map(u => ({
       email: u.email,
       name: u.name,
-      profilePic: u.profilePic || "/uploads/default-profile.png"
+      profilePic: u.profilePic || null,
     }));
 
-    res.json({ requests, connections });
+    res.status(200).json({ requests, connections });
   } catch (err) {
+    console.error("Notification fetch failed:", err);
     res.status(500).json({ msg: "Server error" });
   }
 });
-
-// ------------------ Dev Matching ------------------
+// ------------------ Matching ------------------
 router.get("/match", async (req, res) => {
   const { email } = req.query;
   try {
@@ -387,23 +414,7 @@ router.post("/mark-seen", async (req, res) => {
   }
 });
 
-// ------------------ File Upload for Chat ------------------
-router.post("/upload-file", upload.single("file"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ msg: "No file uploaded" });
-    }
-
-    const fileUrl = `/uploads/chat/${req.file.filename}`;
-    const fileType = req.file.mimetype;
-
-    res.status(200).json({ url: fileUrl, type: fileType });
-  } catch (err) {
-    console.error("❌ File upload error:", err);
-    res.status(500).json({ msg: "Server error during file upload" });
-  }
-});
-// ------------------ Save Pair Programming Session ------------------
+// ------------------ Pair Programming Session ------------------
 router.post("/save-session", async (req, res) => {
   const { room, code, language } = req.body;
 
@@ -424,14 +435,13 @@ router.post("/save-session", async (req, res) => {
     res.status(500).json({ msg: "Server error" });
   }
 });
-// ✅ Load saved session content by room
+
 router.get("/load-session", async (req, res) => {
   const { room } = req.query;
 
   try {
     if (!room) return res.status(400).json({ msg: "Room ID missing" });
 
-    const Session = require("../models/Session");
     const saved = await Session.findOne({ room });
 
     if (!saved) return res.status(404).json({ msg: "No saved session found" });
@@ -445,6 +455,5 @@ router.get("/load-session", async (req, res) => {
     res.status(500).json({ msg: "Server error while loading session" });
   }
 });
-
 
 module.exports = router;

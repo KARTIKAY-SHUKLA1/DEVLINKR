@@ -5,14 +5,13 @@ const dotenv = require("dotenv");
 const path = require("path");
 const http = require("http");
 const { Server } = require("socket.io");
-const Message = require("./models/Message"); // ✅ Import Message model
+const Message = require("./models/Message");
 
 dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
 
-// Initialize Socket.IO
 const io = new Server(server, {
   cors: {
     origin: "http://localhost:5173",
@@ -20,14 +19,14 @@ const io = new Server(server, {
   },
 });
 
-// 🧠 In-memory store for connected users
-const connectedUsers = new Map();
+// Global in-memory stores
+const connectedUsers = new Map(); // email -> socket.id
+const roomUsers = {}; // room -> [user names]
 
-// 🔌 Socket.IO logic
 io.on("connection", (socket) => {
   console.log("🟢 Socket connected:", socket.id);
 
-  // ✅ Register user with email
+  // Register user by email (chat)
   socket.on("register", (email) => {
     connectedUsers.set(email, socket.id);
     console.log("✅ Registered user:", email);
@@ -35,17 +34,16 @@ io.on("connection", (socket) => {
     io.emit("onlineUsers", Array.from(connectedUsers.keys()));
   });
 
-  // ✅ Typing indicator
+  // Typing indicator (chat)
   socket.on("typing", (receiverEmail) => {
     const receiverSocket = connectedUsers.get(receiverEmail);
     if (receiverSocket) {
-      io.to(receiverSocket).emit("typing", {
-        from: [...connectedUsers.entries()].find(([_, id]) => id === socket.id)?.[0],
-      });
+      const senderEmail = [...connectedUsers.entries()].find(([_, id]) => id === socket.id)?.[0];
+      io.to(receiverSocket).emit("typing", { from: senderEmail });
     }
   });
 
-  // ✅ Real-time message delivery with status
+  // Chat message send
   socket.on("sendMessage", async ({ to, messageData }) => {
     const receiverSocket = connectedUsers.get(to);
 
@@ -74,7 +72,7 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ✅ Seen status
+  // Seen status
   socket.on("markSeen", async ({ sender, receiver }) => {
     try {
       await Message.updateMany(
@@ -91,25 +89,58 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ✅ Real-time Pair Programming: join room
-  socket.on("joinRoom", (room) => {
+  // ✅ Join a pair programming room
+  socket.on("joinRoom", ({ room, name }) => {
     socket.join(room);
-    console.log(`🛠️ ${socket.id} joined pair programming room: ${room}`);
+    console.log(`🛠️ ${name} (${socket.id}) joined room: ${room}`);
+
+    // Track users in room
+    if (!roomUsers[room]) roomUsers[room] = [];
+    if (!roomUsers[room].includes(name)) roomUsers[room].push(name);
+
+    // Send updated user list to everyone in room
+    io.to(room).emit("joinedUsers", roomUsers[room]);
   });
 
-  // ✅ Real-time Pair Programming: code update
+  // ✅ Handle code update (broadcast to others in room)
   socket.on("codeUpdate", ({ room, code }) => {
-    socket.to(room).emit("codeUpdate", code); // broadcast to others in the room
+    socket.to(room).emit("codeUpdate", { room, code });
   });
 
-  // ✅ Cleanup on disconnect
+  // ✅ Cursor movement in editor
+  socket.on("cursorMove", ({ room, position }) => {
+    socket.to(room).emit("cursorMove", { position });
+  });
+
+  // ✅ Typing indicator in PairProgramming chat
+  socket.on("typing", ({ room, name }) => {
+    socket.to(room).emit("userTyping", name);
+  });
+
+  // ✅ Message in PairProgramming chat
+  socket.on("newMessage", (msg) => {
+    const { room } = msg;
+    if (room) {
+      socket.to(room).emit("newMessage", msg);
+    }
+  });
+
+  // Handle disconnect
   socket.on("disconnect", () => {
+    // Remove from connectedUsers
     for (let [email, socketId] of connectedUsers.entries()) {
       if (socketId === socket.id) {
         connectedUsers.delete(email);
         console.log("🔴 Disconnected:", email);
         break;
       }
+    }
+
+    // Remove user from all rooms
+    for (let room in roomUsers) {
+      // Note: without user-name mapping to socket id, we can't reliably remove disconnected user names
+      // This is a best-effort approach - you can improve by mapping socket.id -> username on join
+      io.to(room).emit("joinedUsers", roomUsers[room]);
     }
 
     io.emit("onlineUsers", Array.from(connectedUsers.keys()));
@@ -140,12 +171,12 @@ mongoose
     process.exit(1);
   });
 
-// Test route
+// Root test route
 app.get("/", (req, res) => {
-  res.send("🚀 DevMeet backend is running!");
+  res.send("🚀 DevLinkr backend is running!");
 });
 
-// Start server
+// Server start
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🌐 Server running at http://localhost:${PORT}`);

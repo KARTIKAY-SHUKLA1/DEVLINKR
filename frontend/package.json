@@ -10,10 +10,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.4",
+    "@heroicons/react": "^2.2.0",
     "@monaco-editor/react": "^4.7.0",
     "@tailwindcss/vite": "^4.1.10",
     "aos": "^2.3.4",
     "axios": "^1.10.0",
+    "cors-anywhere": "^0.4.4",
+    "emoji-picker-react": "^4.12.3",
     "framer-motion": "^12.19.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
