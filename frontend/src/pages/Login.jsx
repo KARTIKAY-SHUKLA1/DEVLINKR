@@ -23,7 +23,7 @@ const Login = () => {
     e.preventDefault();
     setMessage("");
     try {
-      const res = await axiosInstance.post("/auth/login", form);
+      const res = await axiosInstance.post("/api/auth/login", form);
       const { token, user } = res.data;
 
       localStorage.setItem("token", token);
