@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 
-const upload = require("../utils/cloudinaryUpload");  // ✅ Your Cloudinary multer
+const upload = require("../utils/cloudinaryUpload");
 
 const User = require("../models/user");
 const Otp = require("../models/otp");
@@ -85,11 +85,16 @@ router.post("/signup", upload.single("profilePhoto"), async (req, res) => {
 
     email = email.trim().toLowerCase();
 
-    const skills = Array.isArray(req.body.skills)
-      ? req.body.skills.map((s) => s.trim())
-      : typeof req.body.skills === "string"
-      ? req.body.skills.split(",").map((s) => s.trim())
-      : [];
+    // ✅ Correct skills parsing
+    let skills = [];
+    if (req.body.skills) {
+      try {
+        skills = JSON.parse(req.body.skills);
+        if (!Array.isArray(skills)) skills = [];
+      } catch {
+        skills = [];
+      }
+    }
 
     if (!name || !email || !password || !role) {
       return res.status(400).json({ msg: "Missing required fields" });
@@ -113,7 +118,7 @@ router.post("/signup", upload.single("profilePhoto"), async (req, res) => {
       experience,
       remark,
       skills,
-      profilePic: req.file ? req.file.path : undefined,  // ✅ Cloudinary URL
+      profilePic: req.file ? req.file.path : undefined,
     });
 
     await newUser.save();
@@ -190,8 +195,22 @@ router.put("/profile", upload.single("profilePic"), async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ msg: "User not found" });
 
-    if (skills) user.skills = skills.split(",").map((s) => s.trim());
-    if (interests) user.interests = interests.split(",").map((i) => i.trim());
+    if (skills) {
+      try {
+        user.skills = JSON.parse(skills);
+      } catch {
+        user.skills = [];
+      }
+    }
+
+    if (interests) {
+      try {
+        user.interests = JSON.parse(interests);
+      } catch {
+        user.interests = [];
+      }
+    }
+
     if (availability) user.availability = availability;
     if (experience) user.experience = experience;
     if (github) user.github = github;
@@ -287,7 +306,6 @@ router.get("/notifications", async (req, res) => {
     const user = await User.findOne({ email }).lean();
     if (!user) return res.status(404).json({ msg: "User not found" });
 
-    // Get connection requests
     const requestUsers = await User.find({
       email: { $in: user.connectionRequests || [] },
     }).lean();
@@ -297,7 +315,6 @@ router.get("/notifications", async (req, res) => {
       name: u.name,
     }));
 
-    // Get current connections
     const connectionUsers = await User.find({
       email: { $in: user.connections || [] },
     }).lean();
@@ -314,6 +331,7 @@ router.get("/notifications", async (req, res) => {
     res.status(500).json({ msg: "Server error" });
   }
 });
+
 // ------------------ Matching ------------------
 router.get("/match", async (req, res) => {
   const { email } = req.query;

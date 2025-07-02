@@ -6,10 +6,84 @@ import Navbar from "../components/Navbar";
 
 const BASE_URL = import.meta.env.VITE_BACKEND_URL;
 
-const skillsOptions = [
-  // ... (keep your full options array here unchanged)
-];
 
+const skillsOptions = [
+  // Frontend
+  { value: "html", label: "HTML" },
+  { value: "css", label: "CSS" },
+  { value: "javascript", label: "JavaScript" },
+  { value: "typescript", label: "TypeScript" },
+  { value: "react", label: "React" },
+  { value: "nextjs", label: "Next.js" },
+  { value: "vue", label: "Vue.js" },
+  { value: "svelte", label: "Svelte" },
+  { value: "tailwind", label: "Tailwind CSS" },
+
+  // Backend
+  { value: "nodejs", label: "Node.js" },
+  { value: "express", label: "Express" },
+  { value: "django", label: "Django" },
+  { value: "flask", label: "Flask" },
+  { value: "springboot", label: "Spring Boot" },
+  { value: "fastapi", label: "FastAPI" },
+  { value: "ruby_on_rails", label: "Ruby on Rails" },
+
+  // Databases
+  { value: "mongodb", label: "MongoDB" },
+  { value: "mysql", label: "MySQL" },
+  { value: "postgresql", label: "PostgreSQL" },
+  { value: "redis", label: "Redis" },
+  { value: "firebase", label: "Firebase" },
+
+  // DevOps & Tools
+  { value: "docker", label: "Docker" },
+  { value: "kubernetes", label: "Kubernetes" },
+  { value: "jenkins", label: "Jenkins" },
+  { value: "github_actions", label: "GitHub Actions" },
+  { value: "terraform", label: "Terraform" },
+  { value: "ansible", label: "Ansible" },
+  { value: "aws", label: "AWS" },
+  { value: "azure", label: "Azure" },
+  { value: "gcp", label: "Google Cloud" },
+  { value: "linux", label: "Linux" },
+
+  // Programming Languages
+  { value: "python", label: "Python" },
+  { value: "cpp", label: "C++" },
+  { value: "java", label: "Java" },
+  { value: "golang", label: "Go (Golang)" },
+  { value: "rust", label: "Rust" },
+  { value: "csharp", label: "C#" },
+  { value: "php", label: "PHP" },
+  { value: "swift", label: "Swift" },
+  { value: "kotlin", label: "Kotlin" },
+
+  // AI/ML & Data
+  { value: "tensorflow", label: "TensorFlow" },
+  { value: "pytorch", label: "PyTorch" },
+  { value: "scikit_learn", label: "Scikit-learn" },
+  { value: "pandas", label: "Pandas" },
+  { value: "numpy", label: "NumPy" },
+  { value: "sql", label: "SQL" },
+  { value: "powerbi", label: "Power BI" },
+  { value: "tableau", label: "Tableau" },
+
+  // Testing
+  { value: "jest", label: "Jest" },
+  { value: "cypress", label: "Cypress" },
+  { value: "playwright", label: "Playwright" },
+
+  // Misc
+  { value: "graphql", label: "GraphQL" },
+  { value: "restapi", label: "REST API" },
+  { value: "websockets", label: "WebSockets" },
+  { value: "git", label: "Git" },
+  { value: "figma", label: "Figma" },
+  { value: "postman", label: "Postman" },
+  { value: "chatgpt_api", label: "ChatGPT API" },
+  { value: "langchain", label: "LangChain" },
+  { value: "webrtc", label: "WebRTC" },
+];
 const SignupFlow = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
@@ -51,7 +125,7 @@ const SignupFlow = () => {
     setMessage("");
     try {
       await axios.post(`${BASE_URL}/api/auth/send-otp`, {
-        email: form.email,
+        email: form.email.trim().toLowerCase(),
       });
       setMessage("📨 OTP sent to your email!");
       setStep(2);
@@ -66,8 +140,8 @@ const SignupFlow = () => {
     setMessage("");
     try {
       await axios.post(`${BASE_URL}/api/auth/verify-otp`, {
-        email: form.email,
-        code: form.otp,
+        email: form.email.trim().toLowerCase(),
+        code: form.otp.trim(),
       });
       setMessage("✅ OTP verified!");
       setStep(3);
@@ -84,7 +158,7 @@ const SignupFlow = () => {
       const formData = new FormData();
       for (const [key, value] of Object.entries(form)) {
         if (key === "skills") {
-          value.forEach((v) => formData.append("skills", v));
+          formData.append("skills", JSON.stringify(value));
         } else if (key === "profilePhoto" && value) {
           formData.append("profilePhoto", value);
         } else {
@@ -187,7 +261,9 @@ const SignupFlow = () => {
               )}
 
               <div>
-                <label className="text-sm text-gray-700 block mb-1">🖼️ Profile Photo (optional)</label>
+                <label className="text-sm text-gray-700 block mb-1">
+                  🖼️ Profile Photo (optional)
+                </label>
                 <input
                   type="file"
                   name="profilePhoto"
