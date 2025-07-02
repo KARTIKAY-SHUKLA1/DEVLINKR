@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import axiosInstance from "../utils/axiosInstance";
 import Navbar from "../components/Navbar";
 import { Link } from "react-router-dom";
 
@@ -10,7 +10,7 @@ const Notifications = () => {
 
   const fetchNotifications = async () => {
     try {
-      const res = await axios.get(`http://localhost:5000/api/auth/notifications?email=${user.email}`);
+      await axiosInstance.get(`/auth/notifications?email=${user.email}`);
       const reqs = res.data?.requests || [];
       const cons = res.data?.connections || [];
 
@@ -24,8 +24,7 @@ const Notifications = () => {
   };
 
   const handleAccept = async (fromEmail) => {
-    try {
-      await axios.post("http://localhost:5000/api/auth/accept-request", {
+    try {await axiosInstance.post("/auth/accept-request", {
         from: fromEmail,
         to: user.email,
       });

@@ -2,7 +2,14 @@ import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import Navbar from "../components/Navbar";
 import { motion } from "framer-motion";
-import { FaUserTie, FaUniversity, FaCode, FaGithub, FaRocket, FaUsers } from "react-icons/fa";
+import {
+  FaUserTie,
+  FaUniversity,
+  FaCode,
+  FaGithub,
+  FaRocket,
+  FaUsers
+} from "react-icons/fa";
 
 const UserMatch = () => {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -10,19 +17,21 @@ const UserMatch = () => {
   const [status, setStatus] = useState("");
   const isFetching = useRef(false);
 
+  const BASE_URL = import.meta.env.VITE_BACKEND_URL;
+
   const fetchMatch = async () => {
     if (isFetching.current) return;
     isFetching.current = true;
 
     setStatus("🔄 Searching for your next DevMatch...");
     try {
-      const res = await axios.get(
-        `http://localhost:5000/api/auth/match?email=${user.email}`
-      );
+      const res = await axios.get(`${BASE_URL}/api/auth/match`, {
+        params: { email: user.email },
+      });
       setMatch(res.data);
       setStatus("");
     } catch (err) {
-      console.error("Match error:", err);
+      console.error("❌ Match error:", err);
       setMatch(null);
       setStatus("❌ No match found. Please try again.");
     } finally {
@@ -33,24 +42,22 @@ const UserMatch = () => {
   const handleConnect = async () => {
     if (!match?.email) return;
     try {
-      await axios.post("http://localhost:5000/api/auth/connect-request", {
+      await axios.post(`${BASE_URL}/api/auth/connect-request`, {
         from: user.email,
         to: match.email,
       });
       setStatus("✅ Connection request sent!");
     } catch (err) {
-      console.error("Connect error:", err);
+      console.error("❌ Connect error:", err);
       setStatus("❌ Failed to send request. Try again.");
     }
   };
 
   useEffect(() => {
     fetchMatch();
-
     const handleKeyDown = (e) => {
       if (e.key === "ArrowRight") fetchMatch();
     };
-
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
@@ -60,7 +67,6 @@ const UserMatch = () => {
       <Navbar />
 
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-100 to-white flex flex-col items-center py-12 px-4">
-        {/* Hero */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -75,7 +81,6 @@ const UserMatch = () => {
           </p>
         </motion.div>
 
-        {/* Status message */}
         {status && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -90,7 +95,6 @@ const UserMatch = () => {
           </motion.div>
         )}
 
-        {/* Match Card */}
         {match && (
           <motion.div
             initial={{ opacity: 0, y: 40 }}
@@ -104,7 +108,10 @@ const UserMatch = () => {
             <img
               src={match?.profilePic || "/default-profile.png"}
               alt="Profile"
-              onError={(e) => (e.target.src = "/default-profile.png")}
+              onError={(e) => {
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = "/default-profile.png";
+              }}
               className="w-28 h-28 rounded-full shadow-lg object-cover border-4 border-indigo-200 mx-auto mb-4"
             />
             <h2 className="text-2xl font-bold text-indigo-700 mb-2">{match.name}</h2>
@@ -118,7 +125,6 @@ const UserMatch = () => {
                   <FaUniversity className="text-green-500" /> <strong>College:</strong> {match.college || "N/A"}
                 </p>
               )}
-
               {match.role === "professional" && (
                 <p className="flex items-center justify-center gap-2">
                   <FaUsers className="text-purple-500" /> <strong>Company:</strong> {match.company || "N/A"}
@@ -172,7 +178,6 @@ const UserMatch = () => {
           </motion.div>
         )}
 
-        {/* How it Works */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -200,7 +205,6 @@ const UserMatch = () => {
           </div>
         </motion.div>
 
-        {/* Call to Action */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           whileInView={{ opacity: 1, scale: 1 }}

@@ -1,11 +1,9 @@
 import { useEffect, useState, useRef } from "react";
 import io from "socket.io-client";
-import axios from "axios";
+import api from "../api";
 import { useNavigate } from "react-router-dom";
-import notifSound from "../assets/notif.mp3"; // Add this sound file to play notification sound
 
-const SERVER_URL = "http://localhost:5000";
-const socket = io(SERVER_URL);
+const socket = io(import.meta.env.VITE_API_BASE_URL);
 
 const DevChat = () => {
   const navigate = useNavigate();
@@ -46,7 +44,7 @@ const DevChat = () => {
     if (!user) return;
     const fetchConnections = async () => {
       try {
-        const res = await axios.get(`${SERVER_URL}/api/auth/notifications?email=${user.email}`);
+        const res = await api.get(`/api/auth/notifications?email=${user.email}`);
         setConnections(res.data.connections || []);
       } catch (err) {
         console.error("Error fetching connections:", err);
@@ -60,16 +58,16 @@ const DevChat = () => {
 
     const fetchChat = async () => {
       try {
-        const res = await axios.get(`${SERVER_URL}/api/auth/chat-history`, {
-          params: { user1: user.email, user2: selectedUser.email },
-        });
+        const res = await api.get(`/api/auth/chat-history`, {
+  params: { user1: user.email, user2: selectedUser.email },
+});
         setMessages(res.data);
 
         const unseenMessages = res.data.filter(
           (m) => m.receiver === user.email && m.status !== "seen"
         );
         if (unseenMessages.length > 0) {
-          await axios.post(`${SERVER_URL}/api/auth/mark-seen`, {
+          await api.post(`/api/auth/mark-seen`, {
             sender: selectedUser.email,
             receiver: user.email,
           });
@@ -111,7 +109,7 @@ const DevChat = () => {
         if (msg.receiver === user.email && selectedUser?.email === msg.sender) {
           socket.emit("markSeen", { sender: msg.sender, receiver: msg.receiver });
           try {
-            await axios.post(`${SERVER_URL}/api/auth/mark-seen`, {
+            await api.post(`/api/auth/mark-seen`, {
               sender: msg.sender,
               receiver: msg.receiver,
             });
@@ -169,7 +167,7 @@ const DevChat = () => {
     };
 
     try {
-      await axios.post(`${SERVER_URL}/api/auth/send-message`, newMsg);
+      await api.post(`/api/auth/send-message`, newMsg);
       socket.emit("sendMessage", { to: selectedUser.email, messageData: newMsg });
       setMessages((prev) => [...prev, { ...newMsg, status: "sent", createdAt: new Date() }]);
       setInputMsg("");
@@ -186,7 +184,7 @@ const DevChat = () => {
     formData.append("file", file);
 
     try {
-      const res = await axios.post(`${SERVER_URL}/api/auth/upload-file`, formData);
+      const res = await api.post(`/api/auth/upload-file`, formData);
       const fileUrl = res.data.url;
 
       const newMsg = {
@@ -195,7 +193,7 @@ const DevChat = () => {
         message: fileUrl,
       };
 
-      await axios.post(`${SERVER_URL}/api/auth/send-message`, newMsg);
+      await api.post(`/api/auth/send-message`, newMsg);
       socket.emit("sendMessage", { to: selectedUser.email, messageData: newMsg });
       setMessages((prev) => [...prev, { ...newMsg, status: "sent", createdAt: new Date() }]);
     } catch (err) {

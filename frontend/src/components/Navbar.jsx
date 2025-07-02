@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import axios from "axios";
+import api from "../api";
 import notifSound from "../assets/de9b387f-3cba-4a1c-b66c-44974a312ac4.mp3"; // ✅ Adjust path if moved
 
 const Navbar = () => {
@@ -16,9 +16,9 @@ const Navbar = () => {
     if (!user || !user.email) return;
 
     try {
-      const res = await axios.get(
-        `http://localhost:5000/api/auth/notifications?email=${user.email}`
-      );
+      const res = await api.get(
+  `/api/auth/notifications?email=${user.email}`
+);
       const newReqCount = res.data?.requests?.length || 0;
 
       const prevCount = Number(localStorage.getItem("newNotifCount") || 0);

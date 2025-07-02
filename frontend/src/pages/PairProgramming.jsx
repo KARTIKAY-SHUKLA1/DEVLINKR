@@ -3,12 +3,11 @@ import React, { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Editor from "@monaco-editor/react";
 import io from "socket.io-client";
-import axios from "axios";
+import axiosInstance from "../utils/axiosInstance";
 import { FaFile } from "react-icons/fa";
 import EmojiPicker from "emoji-picker-react";
 
-// ⚙️ Socket.io connection
-const socket = io("http://localhost:5000");
+const socket = io(import.meta.env.VITE_BACKEND_URL);
 
 // ⚙️ Judge0 API Config
 const JUDGE0_API =
@@ -90,7 +89,7 @@ const PairProgramming = () => {
 
     const loadSession = async () => {
       try {
-        const res = await axios.get("http://localhost:5000/api/auth/load-session", {
+        await axiosInstance.get("/auth/load-session", {
           params: { room },
         });
         if (res.data?.code) {
@@ -135,7 +134,7 @@ const PairProgramming = () => {
 
   const handleSave = async () => {
     try {
-      await axios.post("http://localhost:5000/api/auth/save-session", {
+      await axiosInstance.post("/auth/save-session", {
         room,
         code,
         language,

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import axiosInstance from "../utils/axiosInstance";
 import Navbar from "../components/Navbar";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/solid";
 
@@ -23,7 +23,7 @@ const Login = () => {
     e.preventDefault();
     setMessage("");
     try {
-      const res = await axios.post("http://localhost:5000/api/auth/login", form);
+      const res = await axiosInstance.post("/auth/login", form);
       const { token, user } = res.data;
 
       localStorage.setItem("token", token);
