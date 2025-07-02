@@ -18,7 +18,8 @@ const io = new Server(server, {
       "https://devlinkr-git-main-kartikay-shuklas-projects.vercel.app",
       "http://localhost:5173"
     ],
-    methods: ["GET", "POST"]
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
@@ -155,7 +156,8 @@ app.use(cors({
   origin: [
     "https://devlinkr-git-main-kartikay-shuklas-projects.vercel.app",
     "http://localhost:5173"
-  ]
+  ],
+  credentials: true
 }));
 app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));

@@ -2,8 +2,9 @@ import { useEffect, useState, useRef } from "react";
 import io from "socket.io-client";
 import api from "../api";
 import { useNavigate } from "react-router-dom";
+import notifSound from "../assets/de9b387f-3cba-4a1c-b66c-44974a312ac4.mp3";
 
-export const socket = io("https://devlinkr.onrender.com", {
+export const socket =io(import.meta.env.VITE_API_BASE_URL, {
   transports: ["websocket"],
   withCredentials: true,
 });
@@ -40,7 +41,10 @@ const DevChat = () => {
     return `${date.toLocaleDateString([], { month: "short", day: "numeric" })}, ${timeStr}`;
   };
 
-  const getFullUrl = (path) => (path?.startsWith("http") ? path : `${SERVER_URL}${path}`);
+  const getFullUrl = (path) =>
+  path?.startsWith("http")
+    ? path
+    : `${import.meta.env.VITE_API_BASE_URL}${path}`;
   const getProfilePhoto = (u) => (u?.profilePic ? getFullUrl(u.profilePic) : "/default-profile.png");
 
   useEffect(() => {
