@@ -10,7 +10,7 @@ const Notifications = () => {
 
   const fetchNotifications = async () => {
     try {
-      await axiosInstance.get(`/auth/notifications?email=${user.email}`);
+      await axiosInstance.get(`/api/auth/notifications?email=${user.email}`);
       const reqs = res.data?.requests || [];
       const cons = res.data?.connections || [];
 
@@ -24,7 +24,7 @@ const Notifications = () => {
   };
 
   const handleAccept = async (fromEmail) => {
-    try {await axiosInstance.post("/auth/accept-request", {
+    try {await axiosInstance.post("/api/auth/accept-request", {
         from: fromEmail,
         to: user.email,
       });

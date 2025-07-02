@@ -89,7 +89,7 @@ const PairProgramming = () => {
 
     const loadSession = async () => {
       try {
-        await axiosInstance.get("/auth/load-session", {
+        await axiosInstance.get("/api/auth/load-session", {
           params: { room },
         });
         if (res.data?.code) {
@@ -134,7 +134,7 @@ const PairProgramming = () => {
 
   const handleSave = async () => {
     try {
-      await axiosInstance.post("/auth/save-session", {
+      await axiosInstance.post("/api/auth/save-session", {
         room,
         code,
         language,
