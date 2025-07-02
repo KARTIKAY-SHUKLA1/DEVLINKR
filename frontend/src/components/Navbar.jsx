@@ -1,24 +1,32 @@
-import { Link, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useEffect, useState, useRef } from "react";
 import api from "../api";
-import notifSound from "../assets/de9b387f-3cba-4a1c-b66c-44974a312ac4.mp3"; // ✅ Adjust path if moved
+import notifSound from "../assets/de9b387f-3cba-4a1c-b66c-44974a312ac4.mp3";
+import io from "socket.io-client";
+
+// ✅ Set up socket connection
+const socket = io(import.meta.env.VITE_API_BASE_URL, {
+  transports: ["websocket"],
+  withCredentials: true,
+});
 
 const Navbar = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+
   const isLoggedIn = !!localStorage.getItem("token");
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
+  const [newMessageCount, setNewMessageCount] = useState(0);
 
-  const audio = new Audio(notifSound);
+  const audio = useRef(new Audio(notifSound));
 
   const fetchNotificationCount = async () => {
     const user = JSON.parse(localStorage.getItem("user"));
     if (!user || !user.email) return;
 
     try {
-      const res = await api.get(
-  `/api/auth/notifications?email=${user.email}`
-);
+      const res = await api.get(`/api/auth/notifications?email=${user.email}`);
       const newReqCount = res.data?.requests?.length || 0;
 
       const prevCount = Number(localStorage.getItem("newNotifCount") || 0);
@@ -27,9 +35,8 @@ const Navbar = () => {
         setNotifCount(newReqCount);
         localStorage.setItem("newNotifCount", newReqCount.toString());
 
-        // ✅ Play sound only if count increases
         if (newReqCount > prevCount) {
-          audio.play().catch(err => console.error("Audio play failed:", err));
+          audio.current.play().catch(err => console.error("Audio play failed:", err));
         }
       }
     } catch (err) {
@@ -50,6 +57,33 @@ const Navbar = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // ✅ Handle incoming messages via socket
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem("user"));
+    if (!user) return;
+
+    socket.emit("register", user.email);
+
+    socket.on("newMessage", (msg) => {
+      // If you're not on /chat, increment badge and play sound
+      if (!location.pathname.startsWith("/chat")) {
+        setNewMessageCount(prev => prev + 1);
+        audio.current.play().catch(() => {});
+      }
+    });
+
+    return () => {
+      socket.off("newMessage");
+    };
+  }, [location.pathname]);
+
+  // ✅ Reset chat badge if on /chat
+  useEffect(() => {
+    if (location.pathname.startsWith("/chat")) {
+      setNewMessageCount(0);
+    }
+  }, [location.pathname]);
+
   return (
     <nav className="bg-gray-900 text-white shadow-md px-6 py-3 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto flex justify-between items-center">
@@ -68,8 +102,14 @@ const Navbar = () => {
               <Link to="/connect" className="hover:text-blue-400 transition">
                 Let's Connect
               </Link>
-              <Link to="/chat" className="hover:text-green-400 transition">
+
+              <Link to="/chat" className="relative hover:text-green-400 transition">
                 Dev Chat
+                {newMessageCount > 0 && (
+                  <span className="absolute -top-2 -right-3 text-xs bg-red-600 text-white px-2 py-0.5 rounded-full animate-pulse">
+                    +{newMessageCount}
+                  </span>
+                )}
               </Link>
 
               <Link
@@ -156,12 +196,19 @@ const Navbar = () => {
               </Link>
               <Link
                 to="/chat"
-                onClick={() => setMenuOpen(false)}
-                className="block hover:text-green-400"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setNewMessageCount(0);
+                }}
+                className="block relative hover:text-green-400"
               >
                 Dev Chat
+                {newMessageCount > 0 && (
+                  <span className="absolute top-0 right-0 mt-0.5 mr-2 text-xs bg-red-600 text-white px-2 py-0.5 rounded-full animate-pulse">
+                    +{newMessageCount}
+                  </span>
+                )}
               </Link>
-
               <Link
                 to="/notifications"
                 onClick={() => setMenuOpen(false)}
@@ -174,7 +221,6 @@ const Navbar = () => {
                   </span>
                 )}
               </Link>
-
               <Link
                 to="/profile"
                 onClick={() => setMenuOpen(false)}

@@ -66,7 +66,7 @@ const ProfileView = () => {
     ? /^https?:\/\//.test(profile.profilePic)
       ? profile.profilePic
       : `${BASE_URL}${profile.profilePic}`
-    : "/default-profile.png";
+    : "/dp.png";
 
   return (
     <>

@@ -9,17 +9,9 @@ const BASE_URL = import.meta.env.VITE_BACKEND_URL;
 const Profile = () => {
   const navigate = useNavigate();
 
-  // ✅ Safer localStorage read
   const storedUser = localStorage.getItem("user");
   const user = storedUser ? JSON.parse(storedUser) : null;
   const token = localStorage.getItem("token");
-
-  // ✅ Redirect if not logged in
-  useEffect(() => {
-    if (!user || !token) {
-      navigate("/login");
-    }
-  }, [user, token, navigate]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -35,20 +27,25 @@ const Profile = () => {
     availability: "",
   });
 
-  const [preview, setPreview] = useState("/default-profile.png");
+  const [preview, setPreview] = useState("/dp.png");
   const [selectedFile, setSelectedFile] = useState(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // ✅ Load profile on mount
+  // ✅ Load profile only once on mount
   useEffect(() => {
+    if (!user || !token) {
+      navigate("/login");
+      return;
+    }
+
     const fetchProfile = async () => {
-      if (!user) return;
       try {
         const res = await axios.get(`${BASE_URL}/api/auth/profile`, {
           params: { email: user.email },
           headers: { Authorization: `Bearer ${token}` },
         });
+
         const profile = res.data;
 
         setFormData({
@@ -62,7 +59,7 @@ const Profile = () => {
             ? /^https?:\/\//.test(profile.profilePic)
               ? profile.profilePic
               : `${BASE_URL}${profile.profilePic}`
-            : "/default-profile.png"
+            : "/dp.png"
         );
 
         setLoading(false);
@@ -74,14 +71,12 @@ const Profile = () => {
     };
 
     fetchProfile();
-  }, [user, token]);
+  }, []); // ✅ Run only on mount
 
-  // ✅ Handle form changes
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // ✅ Check image size
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -94,7 +89,6 @@ const Profile = () => {
     }
   };
 
-  // ✅ Submit
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage("");

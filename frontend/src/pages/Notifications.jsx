@@ -63,7 +63,7 @@ const Notifications = () => {
                   >
                     <Link to={`/profile/${req.email}`} className="flex items-center gap-3">
                       <img
-                        src={req.profilePic ? req.profilePic : "/default-profile.png"}
+                        src={req.profilePic ? req.profilePic : "/dp.png"}
                         alt={req.name}
                         className="w-10 h-10 rounded-full object-cover border border-indigo-200"
                       />

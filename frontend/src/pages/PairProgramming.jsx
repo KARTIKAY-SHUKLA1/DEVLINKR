@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Editor from "@monaco-editor/react";
 import io from "socket.io-client";
+import axios from "axios";
 import axiosInstance from "../utils/axiosInstance";
 import { FaFile } from "react-icons/fa";
 import EmojiPicker from "emoji-picker-react";
@@ -47,7 +48,6 @@ const PairProgramming = () => {
   const user = JSON.parse(localStorage.getItem("user")) || { name: "Guest" };
 
   useEffect(() => {
-    // Join room with name and room as an object
     socket.emit("joinRoom", { room, name: user.name });
 
     socket.on("codeUpdate", ({ room: incomingRoom, code: newCode }) => {
@@ -89,7 +89,7 @@ const PairProgramming = () => {
 
     const loadSession = async () => {
       try {
-        await axiosInstance.get("/api/auth/load-session", {
+        const res = await axiosInstance.get("/api/auth/load-session", {
           params: { room },
         });
         if (res.data?.code) {
@@ -211,11 +211,10 @@ const PairProgramming = () => {
     }
   };
 
-  // UPDATED sendMessage to include room for broadcasting
   const sendMessage = () => {
     if (!message.trim()) return;
     const newMsg = {
-      room, // include room
+      room,
       type: "text",
       content: message,
       sender: user.name,
@@ -235,7 +234,7 @@ const PairProgramming = () => {
     const type = file.type.startsWith("image/") ? "image" : "file";
 
     const msg = {
-      room, // include room
+      room,
       type,
       content: url,
       name: file.name,
@@ -253,7 +252,7 @@ const PairProgramming = () => {
   };
 
   return (
-    <div className="flex h-screen bg-[#1e1e1e] text-white">
+    <div className="flex h-screen bg-[#1e1e1e] text-white flex-col">
       <style>{`
         .ghost-cursor {
           border-left: 2px solid #ff4081;
@@ -266,153 +265,145 @@ const PairProgramming = () => {
         }
       `}</style>
 
-      {/* Left Side */}
-      <div className="w-12 bg-[#252526] flex flex-col items-center py-4 space-y-6">
-        <FaFile size={20} />
-      </div>
-
-      {/* Main Area */}
-      <div className="flex flex-col flex-1">
-        {/* Header */}
-        <div className="bg-[#2d2d2d] h-10 flex items-center px-4 justify-between text-sm">
-          <span>📄 index.{language}</span>
-          <div className="flex items-center gap-2">
-            <div className="text-xs text-gray-300">👨‍💻 {usersInRoom.join(", ")}</div>
-            <button onClick={toggleTheme} className="bg-gray-600 px-2 py-1 rounded">Toggle Theme</button>
-            <select value={language} onChange={(e) => setLanguage(e.target.value)} className="bg-black px-2 py-1 rounded">
-              <option value="javascript">JavaScript</option>
-              <option value="python">Python</option>
-              <option value="cpp">C++</option>
-              <option value="java">Java</option>
-            </select>
-            <button onClick={handleCopy} className="bg-yellow-600 px-2 py-1 rounded">📋</button>
-            <button onClick={handleDownload} className="bg-green-600 px-2 py-1 rounded">⬇</button>
-            <button onClick={handleSave} className="bg-blue-600 px-2 py-1 rounded">💾</button>
-            <button onClick={runCode} className="bg-red-600 px-2 py-1 rounded">▶ {isRunning ? "Running..." : "Run"}</button>
-            <button
-              onClick={() => {
-                const link = `${window.location.origin}/pair?room=${room}`;
-                navigator.clipboard.writeText(link);
-                alert("Invite link copied!");
-              }}
-              className="bg-pink-600 px-2 py-1 rounded"
-            >
-              🔗 Invite
-            </button>
-          </div>
-        </div>
-
-        {/* Editor + Chat */}
-        <div className="flex flex-1 overflow-hidden">
-          {/* Editor */}
-          <div className="w-3/4 flex flex-col">
-            <Editor
-              height="100%"
-              language={language}
-              theme={theme}
-              value={code}
-              onChange={handleEditorChange}
-              onMount={(editor) => {
-                editorRef.current = editor;
-                editor.onDidChangeCursorPosition((e) => {
-                  socket.emit("cursorMove", {
-                    room,
-                    position: e.position,
-                  });
-                });
-              }}
-            />
-            <div className="bg-black text-green-400 p-2 h-32 overflow-y-auto text-sm font-mono border-t border-gray-600">
-              <strong>Output:</strong>
-              <pre>{output}</pre>
-            </div>
-          </div>
-
-          {/* Chat */}
-          <div className="w-1/4 bg-[#1f1f1f] flex flex-col border-l border-gray-700">
-            <div className="flex-1 overflow-y-auto p-2 space-y-2">
-              {messages.map((msg, idx) => (
-                <div
-                  key={idx}
-                  className={`px-2 py-1 rounded relative group max-w-[90%] ${
-                    msg.sender === "You"
-                      ? "bg-blue-600 self-end text-right"
-                      : "bg-gray-700 self-start text-left"
-                  }`}
-                >
-                  <div className="text-xs text-gray-300">
-                    {msg.sender === "You" ? "You" : msg.sender}
-                  </div>
-                  {msg.type === "text" && <span>{msg.content}</span>}
-                  {msg.type === "image" && (
-                    <img
-                      src={msg.content}
-                      alt=""
-                      className="rounded max-w-[150px] cursor-pointer"
-                      onClick={() => setViewerImage(msg.content)}
-                    />
-                  )}
-                  {msg.type === "file" && (
-                    <a href={msg.content} download className="text-blue-400 underline">
-                      📎 {msg.name}
-                    </a>
-                  )}
-                  <div className="text-[10px] text-gray-400 mt-1">
-                    {formatTime(msg.timestamp)} {msg.status === "Seen" ? "✔✔" : "✔"}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {typingUser && (
-              <div className="text-xs text-gray-400 italic px-2 pb-1">
-                {typingUser} is typing...
-              </div>
-            )}
-
-            <div className="p-2 flex items-center gap-1 border-t border-gray-700">
-              <input ref={fileInputRef} type="file" hidden onChange={handleFileUpload} />
-              <button onClick={() => fileInputRef.current.click()}>📎</button>
-              <div className="relative">
-                <button onClick={() => setShowEmojiPicker(!showEmojiPicker)}>😄</button>
-                {showEmojiPicker && (
-                  <div className="absolute bottom-10 right-0 z-50">
-                    <EmojiPicker onEmojiClick={(e) => setMessage((prev) => prev + e.emoji)} theme="dark" />
-                  </div>
-                )}
-              </div>
-              <input
-                value={message}
-                onChange={(e) => {
-                  setMessage(e.target.value);
-                  socket.emit("typing", { room, name: user.name });
-                }}
-                className="flex-1 px-2 py-1 rounded bg-[#2e2e2e] text-white"
-                placeholder="Type..."
-                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-              />
-              <button onClick={sendMessage} className="bg-purple-600 px-2 py-1 rounded">Send</button>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="bg-[#007acc] h-6 text-xs flex items-center px-4 justify-between">
-          <span>Lang: {language}</span>
-          <span>Room: {room}</span>
-          <span>Status: {saveStatus}</span>
-        </div>
-
-        {/* Image Viewer */}
-        {viewerImage && (
-          <div
-            onClick={() => setViewerImage(null)}
-            className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50"
+      {/* Header */}
+      <div className="bg-[#2d2d2d] h-10 flex items-center px-4 justify-between text-sm">
+        <span>📄 index.{language}</span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="text-xs text-gray-300">👨‍💻 {usersInRoom.join(", ")}</div>
+          <button onClick={toggleTheme} className="bg-gray-600 px-2 py-1 rounded">Toggle Theme</button>
+          <select value={language} onChange={(e) => setLanguage(e.target.value)} className="bg-black px-2 py-1 rounded">
+            <option value="javascript">JavaScript</option>
+            <option value="python">Python</option>
+            <option value="cpp">C++</option>
+            <option value="java">Java</option>
+          </select>
+          <button onClick={handleCopy} className="bg-yellow-600 px-2 py-1 rounded">📋</button>
+          <button onClick={handleDownload} className="bg-green-600 px-2 py-1 rounded">⬇</button>
+          <button onClick={handleSave} className="bg-blue-600 px-2 py-1 rounded">💾</button>
+          <button onClick={runCode} className="bg-red-600 px-2 py-1 rounded">▶ {isRunning ? "Running..." : "Run"}</button>
+          <button
+            onClick={() => {
+              const link = `${window.location.origin}/pair?room=${room}`;
+              navigator.clipboard.writeText(link);
+              alert("Invite link copied!");
+            }}
+            className="bg-pink-600 px-2 py-1 rounded"
           >
-            <img src={viewerImage} alt="preview" className="max-w-[90%] max-h-[90%] rounded" />
-          </div>
-        )}
+            🔗 Invite
+          </button>
+        </div>
       </div>
+
+      {/* Editor + Chat Responsive */}
+      <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
+        {/* Editor */}
+        <div className="w-full md:w-3/4 flex flex-col h-[50%] md:h-full">
+          <Editor
+            height="100%"
+            language={language}
+            theme={theme}
+            value={code}
+            onChange={handleEditorChange}
+            onMount={(editor) => {
+              editorRef.current = editor;
+              editor.onDidChangeCursorPosition((e) => {
+                socket.emit("cursorMove", {
+                  room,
+                  position: e.position,
+                });
+              });
+            }}
+          />
+          <div className="bg-black text-green-400 p-2 h-32 overflow-y-auto text-sm font-mono border-t border-gray-600">
+            <strong>Output:</strong>
+            <pre>{output}</pre>
+          </div>
+        </div>
+
+        {/* Chat */}
+        <div className="w-full md:w-1/4 h-[50%] md:h-full bg-[#1f1f1f] flex flex-col border-t md:border-t-0 md:border-l border-gray-700">
+          <div className="flex-1 overflow-y-auto p-2 space-y-2">
+            {messages.map((msg, idx) => (
+              <div
+                key={idx}
+                className={`px-2 py-1 rounded relative group max-w-[90%] ${
+                  msg.sender === "You"
+                    ? "bg-blue-600 self-end text-right"
+                    : "bg-gray-700 self-start text-left"
+                }`}
+              >
+                <div className="text-xs text-gray-300">
+                  {msg.sender === "You" ? "You" : msg.sender}
+                </div>
+                {msg.type === "text" && <span>{msg.content}</span>}
+                {msg.type === "image" && (
+                  <img
+                    src={msg.content}
+                    alt=""
+                    className="rounded max-w-[150px] cursor-pointer"
+                    onClick={() => setViewerImage(msg.content)}
+                  />
+                )}
+                {msg.type === "file" && (
+                  <a href={msg.content} download className="text-blue-400 underline">
+                    📎 {msg.name}
+                  </a>
+                )}
+                <div className="text-[10px] text-gray-400 mt-1">
+                  {formatTime(msg.timestamp)} {msg.status === "Seen" ? "✔✔" : "✔"}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {typingUser && (
+            <div className="text-xs text-gray-400 italic px-2 pb-1">
+              {typingUser} is typing...
+            </div>
+          )}
+
+          <div className="p-2 flex items-center gap-1 border-t border-gray-700">
+            <input ref={fileInputRef} type="file" hidden onChange={handleFileUpload} />
+            <button onClick={() => fileInputRef.current.click()}>📎</button>
+            <div className="relative">
+              <button onClick={() => setShowEmojiPicker(!showEmojiPicker)}>😄</button>
+              {showEmojiPicker && (
+                <div className="absolute bottom-10 right-0 z-50">
+                  <EmojiPicker onEmojiClick={(e) => setMessage((prev) => prev + e.emoji)} theme="dark" />
+                </div>
+              )}
+            </div>
+            <input
+              value={message}
+              onChange={(e) => {
+                setMessage(e.target.value);
+                socket.emit("typing", { room, name: user.name });
+              }}
+              className="flex-1 px-2 py-1 rounded bg-[#2e2e2e] text-white"
+              placeholder="Type..."
+              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+            />
+            <button onClick={sendMessage} className="bg-purple-600 px-2 py-1 rounded">Send</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="bg-[#007acc] h-6 text-xs flex items-center px-4 justify-between">
+        <span>Lang: {language}</span>
+        <span>Room: {room}</span>
+        <span>Status: {saveStatus}</span>
+      </div>
+
+      {/* Image Viewer */}
+      {viewerImage && (
+        <div
+          onClick={() => setViewerImage(null)}
+          className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50"
+        >
+          <img src={viewerImage} alt="preview" className="max-w-[90%] max-h-[90%] rounded" />
+        </div>
+      )}
     </div>
   );
 };

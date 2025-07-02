@@ -135,7 +135,7 @@ const Home = () => {
 
       {/* Footer */}
       <footer id="contact" className="bg-gray-900 text-gray-300 py-8 text-center">
-        <p>Made with ❤️ by Kartikay Shukla | © {new Date().getFullYear()} DevLinkr</p>
+        <p>Made by Kartikay Shukla | © {new Date().getFullYear()} DevLinkr</p>
         <div className="mt-4 space-x-4">
           <a href="#" className="hover:text-white">Privacy</a>
           <a href="#" className="hover:text-white">Terms</a>

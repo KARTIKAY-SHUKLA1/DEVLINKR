@@ -106,11 +106,11 @@ const UserMatch = () => {
               Press → to skip
             </div>
             <img
-              src={match?.profilePic || "/default-profile.png"}
+              src={match?.profilePic || "/dp.png"}
               alt="Profile"
               onError={(e) => {
                 e.currentTarget.onerror = null;
-                e.currentTarget.src = "/default-profile.png";
+                e.currentTarget.src = "/dp.png";
               }}
               className="w-28 h-28 rounded-full shadow-lg object-cover border-4 border-indigo-200 mx-auto mb-4"
             />

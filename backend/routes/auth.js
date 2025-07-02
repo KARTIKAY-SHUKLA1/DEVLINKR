@@ -220,46 +220,49 @@ router.post("/login", async (req, res) => {
     res.status(500).json({ msg: "Server error" });
   }
 });
-
 // ------------------ Profile Update ------------------
 router.put("/profile", upload.single("profilePic"), async (req, res) => {
-  const {
-    email,
-    skills,
-    interests,
-    availability,
-    experience,
-    github,
-    bio,
-  } = req.body;
-
   try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ msg: "Email required" });
+
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ msg: "User not found" });
 
-    if (skills) {
+    // Parse JSON string fields
+    if (req.body.skills) {
       try {
-        user.skills = JSON.parse(skills);
+        user.skills = JSON.parse(req.body.skills);
       } catch {
         user.skills = [];
       }
     }
 
-    if (interests) {
+    if (req.body.interests) {
       try {
-        user.interests = JSON.parse(interests);
+        user.interests = JSON.parse(req.body.interests);
       } catch {
         user.interests = [];
       }
     }
 
-    if (availability) user.availability = availability;
-    if (experience) user.experience = experience;
-    if (github) user.github = github;
-    if (bio) user.bio = bio;
-    if (req.file) user.profilePic = req.file.path;
+    // Simple string fields
+    if (req.body.name) user.name = req.body.name;
+    if (req.body.role) user.role = req.body.role;
+    if (req.body.college) user.college = req.body.college;
+    if (req.body.company) user.company = req.body.company;
+    if (req.body.availability) user.availability = req.body.availability;
+    if (req.body.experience) user.experience = req.body.experience;
+    if (req.body.github) user.github = req.body.github;
+    if (req.body.bio) user.bio = req.body.bio;
+
+    // Handle new profilePic
+    if (req.file) {
+      user.profilePic = req.file.path;
+    }
 
     await user.save();
+
     res.json({ msg: "✅ Profile updated", profilePic: user.profilePic });
   } catch (err) {
     console.error(err);
@@ -348,6 +351,7 @@ router.get("/notifications", async (req, res) => {
     const user = await User.findOne({ email }).lean();
     if (!user) return res.status(404).json({ msg: "User not found" });
 
+    // 1️⃣ Build requests
     const requestUsers = await User.find({
       email: { $in: user.connectionRequests || [] },
     }).lean();
@@ -357,17 +361,32 @@ router.get("/notifications", async (req, res) => {
       name: u.name,
     }));
 
+    // 2️⃣ Build connections
     const connectionUsers = await User.find({
       email: { $in: user.connections || [] },
     }).lean();
 
-    const connections = connectionUsers.map(u => ({
-      email: u.email,
-      name: u.name,
-      profilePic: u.profilePic || null,
-    }));
+    // 3️⃣ Count unseen messages per connection
+    const connections = await Promise.all(
+      connectionUsers.map(async (u) => {
+        const unseenCount = await Message.countDocuments({
+          sender: u.email,
+          receiver: email,
+          status: { $ne: "seen" },
+        });
 
+        return {
+          email: u.email,
+          name: u.name,
+          profilePic: u.profilePic || null,
+          unseenMessages: unseenCount,
+        };
+      })
+    );
+
+    // ✅ Send result
     res.status(200).json({ requests, connections });
+
   } catch (err) {
     console.error("Notification fetch failed:", err);
     res.status(500).json({ msg: "Server error" });
@@ -375,22 +394,18 @@ router.get("/notifications", async (req, res) => {
 });
 
 // ------------------ Matching ------------------
-
 router.get("/match", async (req, res) => {
   const { email } = req.query;
   try {
     const currentUser = await User.findOne({ email });
     if (!currentUser) return res.status(404).json({ msg: "User not found" });
 
-    // Defensive check for skills/interests
+    // Lowercased skills of current user
     const userSkills = Array.isArray(currentUser.skills)
-      ? currentUser.skills.map((s) => s.toLowerCase())
+      ? currentUser.skills.map(s => s.toLowerCase())
       : [];
 
-    const userInterests = Array.isArray(currentUser.interests)
-      ? currentUser.interests.map((i) => i.toLowerCase())
-      : [];
-
+    // Exclude users already connected/requested
     const exclude = new Set([
       currentUser.email,
       ...currentUser.connections,
@@ -398,47 +413,56 @@ router.get("/match", async (req, res) => {
     ]);
 
     const incomingRequests = await User.find({ connectionRequests: email });
-    incomingRequests.forEach((u) => exclude.add(u.email));
+    incomingRequests.forEach(u => exclude.add(u.email));
 
-    const others = await User.find({ email: { $nin: [...exclude] } });
-    const matches = others
-      .map((user) => {
-        const skillMatch = Array.isArray(user.skills)
-          ? user.skills.filter((s) => userSkills.includes(s.toLowerCase())).length
+    // Get all other users not excluded
+    const others = await User.find({ email: { $nin: Array.from(exclude) } });
+
+    // Score them by number of matching skills
+    const scoredMatches = others
+      .map(user => {
+        const skillMatchCount = Array.isArray(user.skills)
+          ? user.skills.filter(s => userSkills.includes(s.toLowerCase())).length
           : 0;
-
-        const interestMatch = Array.isArray(user.interests)
-          ? user.interests.filter((i) => userInterests.includes(i.toLowerCase())).length
-          : 0;
-
-        return { user, score: skillMatch + interestMatch };
+        return { user, skillMatchCount };
       })
-      .filter((e) => e.score > 0);
+      .filter(match => match.skillMatchCount > 0); // Must have at least 1 skill in common
 
-    if (matches.length === 0) {
+    if (scoredMatches.length === 0) {
       return res.status(404).json({ msg: "No suitable match found" });
     }
 
-    const bestMatch = matches[Math.floor(Math.random() * matches.length)].user;
+    // Partition into best (>=3) and good (1-2)
+    const bestMatches = scoredMatches.filter(m => m.skillMatchCount >= 3);
+    const goodMatches = scoredMatches.filter(m => m.skillMatchCount < 3);
+
+    let selected;
+    if (bestMatches.length > 0) {
+      // Prefer best matches
+      selected = bestMatches[Math.floor(Math.random() * bestMatches.length)].user;
+    } else {
+      // Fall back to any acceptable match
+      selected = goodMatches[Math.floor(Math.random() * goodMatches.length)].user;
+    }
 
     res.json({
-      name: bestMatch.name,
-      email: bestMatch.email,
-      role: bestMatch.role,
-      college: bestMatch.college,
-      company: bestMatch.company,
-      skills: bestMatch.skills || [],
-      interests: bestMatch.interests || [],
-      availability: bestMatch.availability,
-      github: bestMatch.github,
-      profilePic: bestMatch.profilePic || null,
+      name: selected.name,
+      email: selected.email,
+      role: selected.role,
+      college: selected.college,
+      company: selected.company,
+      skills: selected.skills || [],
+      interests: selected.interests || [],
+      availability: selected.availability,
+      github: selected.github,
+      profilePic: selected.profilePic || null,
     });
+
   } catch (err) {
     console.error("❌ Error in /match route:", err);
     res.status(500).json({ msg: "Server error" });
   }
 });
-
 // ------------------ Dev Chat ------------------
 router.post("/send-message", async (req, res) => {
   const { sender, receiver, message } = req.body;
