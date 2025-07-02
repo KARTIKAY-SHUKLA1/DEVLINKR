@@ -300,7 +300,7 @@ router.post("/upload-file", upload.single("file"), async (req, res) => {
 });
 
 // ------------------ Connection System ------------------
-
+// Send a connection request
 router.post("/connect-request", async (req, res) => {
   const { from, to } = req.body;
 
@@ -308,17 +308,22 @@ router.post("/connect-request", async (req, res) => {
     const receiver = await User.findOne({ email: to });
     if (!receiver) return res.status(404).json({ msg: "User not found" });
 
-    if (!receiver.connectionRequests.includes(from) && !receiver.connections.includes(from)) {
+    if (
+      !receiver.connectionRequests.includes(from) &&
+      !receiver.connections.includes(from)
+    ) {
       receiver.connectionRequests.push(from);
       await receiver.save();
     }
 
     res.json({ msg: "✅ Request sent" });
   } catch (err) {
+    console.error("Connect request error:", err);
     res.status(500).json({ msg: "Server error" });
   }
 });
 
+// Accept a connection request
 router.post("/accept-request", async (req, res) => {
   const { from, to } = req.body;
 
@@ -326,21 +331,24 @@ router.post("/accept-request", async (req, res) => {
     const receiver = await User.findOne({ email: to });
     const sender = await User.findOne({ email: from });
 
-    if (!receiver || !sender) return res.status(404).json({ msg: "User not found" });
+    if (!receiver || !sender)
+      return res.status(404).json({ msg: "User not found" });
 
-    // Add to connections
+    // Add to each other's connections
     if (!receiver.connections.includes(from)) receiver.connections.push(from);
     if (!sender.connections.includes(to)) sender.connections.push(to);
 
-    // Remove from receiver's pending requests
-    receiver.connectionRequests = receiver.connectionRequests.filter((e) => e !== from);
+    // Remove request from pending list
+    receiver.connectionRequests = receiver.connectionRequests.filter(
+      (e) => e !== from
+    );
 
-    // Add "accepted" notification to sender
+    // Add notification to sender
     sender.notifications = sender.notifications || [];
     sender.notifications.push({
       type: "accepted",
       from: to,
-      timestamp: new Date()
+      timestamp: new Date(),
     });
 
     await receiver.save();
@@ -348,10 +356,12 @@ router.post("/accept-request", async (req, res) => {
 
     res.json({ msg: "✅ Connected" });
   } catch (err) {
+    console.error("Accept request error:", err);
     res.status(500).json({ msg: "Server error" });
   }
 });
 
+// Fetch notifications and connections
 router.get("/notifications", async (req, res) => {
   const { email } = req.query;
 
@@ -363,24 +373,24 @@ router.get("/notifications", async (req, res) => {
     const user = await User.findOne({ email }).lean();
     if (!user) return res.status(404).json({ msg: "User not found" });
 
-    // 1️⃣ Build requests
+    // 1️⃣ Fetch users who sent connection requests
     const requestUsers = await User.find({
       email: { $in: user.connectionRequests || [] },
     }).lean();
 
-    const requests = requestUsers.map(u => ({
-      email: u.email,
+    const requests = requestUsers.map((u) => ({
+      type: "request",
+      from: u.email,
       name: u.name,
       profilePic: u.profilePic || null,
-      type: "request"
+      timestamp: new Date(), // Optional: or omit timestamp if not needed
     }));
 
-    // 2️⃣ Build connections
+    // 2️⃣ Fetch connected users
     const connectionUsers = await User.find({
       email: { $in: user.connections || [] },
     }).lean();
 
-    // 3️⃣ Count unseen messages
     const connections = await Promise.all(
       connectionUsers.map(async (u) => {
         const unseenCount = await Message.countDocuments({
@@ -398,37 +408,47 @@ router.get("/notifications", async (req, res) => {
       })
     );
 
-    // 4️⃣ Accepted notifications
+    // 3️⃣ Accepted notifications
     const acceptedNotifs = (user.notifications || [])
-      .filter(n => n.type === "accepted")
-      .map(n => ({
+      .filter((n) => n.type === "accepted")
+      .map((n) => ({
         type: "accepted",
         from: n.from,
-        timestamp: n.timestamp
+        timestamp: n.timestamp,
       }));
 
     const acceptedUsers = await User.find({
-      email: { $in: acceptedNotifs.map(n => n.from) }
+      email: { $in: acceptedNotifs.map((n) => n.from) },
     }).lean();
 
-    const accepted = acceptedNotifs.map(n => {
-      const u = acceptedUsers.find(u => u.email === n.from);
+    const accepted = acceptedNotifs.map((n) => {
+      const u = acceptedUsers.find((u) => u.email === n.from);
       return {
         type: "accepted",
-        email: u?.email || n.from,
+        from: u?.email || n.from,
         name: u?.name || n.from,
         profilePic: u?.profilePic || null,
-        timestamp: n.timestamp
+        timestamp: n.timestamp,
       };
     });
 
-    res.status(200).json({ requests, connections, accepted });
+    // ✅ Combine notifications
+    const notifications = [...requests, ...accepted].sort(
+      (a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0)
+    );
 
+    res.status(200).json({
+      notifications,
+      connections,
+    });
   } catch (err) {
     console.error("Notification fetch failed:", err);
     res.status(500).json({ msg: "Server error" });
   }
 });
+
+module.exports = router;
+
 
 // ------------------ Matching ------------------
 router.get("/match", async (req, res) => {
