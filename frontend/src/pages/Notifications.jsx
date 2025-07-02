@@ -5,26 +5,28 @@ import { Link } from "react-router-dom";
 
 const Notifications = () => {
   const user = JSON.parse(localStorage.getItem("user"));
-  const [requests, setRequests] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [connections, setConnections] = useState([]);
 
   const fetchNotifications = async () => {
-  try {
-    const res = await axiosInstance.get(`/api/auth/notifications?email=${user.email}`);
-    const reqs = res.data?.requests || [];
-    const cons = res.data?.connections || [];
+    try {
+      const res = await axiosInstance.get(`/api/auth/notifications?email=${user.email}`);
+      const notifs = res.data?.notifications || [];
+      const cons = res.data?.connections || [];
 
-    setRequests(reqs);
-    setConnections(cons);
+      setNotifications(notifs);
+      setConnections(cons);
 
-    localStorage.setItem("newNotifCount", reqs.length.toString());
-  } catch (err) {
-    console.error("Notification fetch error:", err);
-  }
-};
+      const newReqCount = notifs.filter((n) => n.type === "request").length;
+      localStorage.setItem("newNotifCount", newReqCount.toString());
+    } catch (err) {
+      console.error("Notification fetch error:", err);
+    }
+  };
 
   const handleAccept = async (fromEmail) => {
-    try {await axiosInstance.post("/api/auth/accept-request", {
+    try {
+      await axiosInstance.post("/api/auth/accept-request", {
         from: fromEmail,
         to: user.email,
       });
@@ -32,6 +34,11 @@ const Notifications = () => {
     } catch (err) {
       console.error("Accept error:", err);
     }
+  };
+
+  const handleDismiss = (email, type) => {
+    setNotifications((prev) => prev.filter((n) => !(n.from === email && n.type === type)));
+    // Optional: send a dismiss update to backend
   };
 
   useEffect(() => {
@@ -50,31 +57,50 @@ const Notifications = () => {
 
           <div className="mb-10">
             <h3 className="text-lg md:text-xl font-semibold mb-4 text-gray-800">
-              Incoming Connection Requests
+              Connection Notifications
             </h3>
-            {requests.length === 0 ? (
-              <div className="text-gray-500 italic">✨ No new requests at the moment</div>
+            {notifications.length === 0 ? (
+              <div className="text-gray-500 italic">✨ No new notifications at the moment</div>
             ) : (
               <div className="space-y-4">
-                {requests.map((req) => (
+                {notifications.map((n) => (
                   <div
-                    key={req.email}
+                    key={n.from + n.type}
                     className="flex items-center justify-between bg-indigo-50 border border-indigo-100 rounded-xl p-4 shadow-sm hover:shadow-md transition"
                   >
-                    <Link to={`/profile/${req.email}`} className="flex items-center gap-3">
+                    <Link to={`/profile/${n.from}`} className="flex items-center gap-3">
                       <img
-                        src={req.profilePic ? req.profilePic : "/dp.png"}
-                        alt={req.name}
+                        src={n.profilePic && n.profilePic.trim() !== "" ? n.profilePic : "/dp.png"}
+                        alt={n.name}
                         className="w-10 h-10 rounded-full object-cover border border-indigo-200"
                       />
-                      <span className="text-indigo-800 font-medium hover:underline">{req.name}</span>
+                      <div className="flex flex-col">
+                        <span className="text-indigo-800 font-medium hover:underline">{n.name}</span>
+                        <span className="text-sm text-gray-500">
+                          {n.type === "request"
+                            ? "sent you a connection request"
+                            : "accepted your connection request 🎉"}
+                        </span>
+                      </div>
                     </Link>
-                    <button
-                      onClick={() => handleAccept(req.email)}
-                      className="flex items-center gap-1 bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition text-sm"
-                    >
-                      ✅ Accept
-                    </button>
+
+                    <div className="flex items-center gap-2">
+                      {n.type === "request" && (
+                        <button
+                          onClick={() => handleAccept(n.from)}
+                          className="bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition text-sm"
+                        >
+                          ✅ Accept
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDismiss(n.from, n.type)}
+                        className="text-red-600 text-xl font-bold hover:text-red-800"
+                        title="Dismiss"
+                      >
+                        ❌
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -96,7 +122,7 @@ const Notifications = () => {
                     className="flex items-center gap-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 p-3 rounded-xl shadow-sm transition"
                   >
                     <img
-                      src={conn.profilePic ? conn.profilePic : "/default-profile.png"}
+                      src={conn.profilePic && conn.profilePic.trim() !== "" ? conn.profilePic : "/dp.png"}
                       alt={conn.name}
                       className="w-9 h-9 rounded-full object-cover border"
                     />

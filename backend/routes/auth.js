@@ -300,6 +300,7 @@ router.post("/upload-file", upload.single("file"), async (req, res) => {
 });
 
 // ------------------ Connection System ------------------
+
 router.post("/connect-request", async (req, res) => {
   const { from, to } = req.body;
 
@@ -327,9 +328,20 @@ router.post("/accept-request", async (req, res) => {
 
     if (!receiver || !sender) return res.status(404).json({ msg: "User not found" });
 
-    receiver.connections.push(from);
-    sender.connections.push(to);
+    // Add to connections
+    if (!receiver.connections.includes(from)) receiver.connections.push(from);
+    if (!sender.connections.includes(to)) sender.connections.push(to);
+
+    // Remove from receiver's pending requests
     receiver.connectionRequests = receiver.connectionRequests.filter((e) => e !== from);
+
+    // Add "accepted" notification to sender
+    sender.notifications = sender.notifications || [];
+    sender.notifications.push({
+      type: "accepted",
+      from: to,
+      timestamp: new Date()
+    });
 
     await receiver.save();
     await sender.save();
@@ -359,6 +371,8 @@ router.get("/notifications", async (req, res) => {
     const requests = requestUsers.map(u => ({
       email: u.email,
       name: u.name,
+      profilePic: u.profilePic || null,
+      type: "request"
     }));
 
     // 2️⃣ Build connections
@@ -366,7 +380,7 @@ router.get("/notifications", async (req, res) => {
       email: { $in: user.connections || [] },
     }).lean();
 
-    // 3️⃣ Count unseen messages per connection
+    // 3️⃣ Count unseen messages
     const connections = await Promise.all(
       connectionUsers.map(async (u) => {
         const unseenCount = await Message.countDocuments({
@@ -384,8 +398,31 @@ router.get("/notifications", async (req, res) => {
       })
     );
 
-    // ✅ Send result
-    res.status(200).json({ requests, connections });
+    // 4️⃣ Accepted notifications
+    const acceptedNotifs = (user.notifications || [])
+      .filter(n => n.type === "accepted")
+      .map(n => ({
+        type: "accepted",
+        from: n.from,
+        timestamp: n.timestamp
+      }));
+
+    const acceptedUsers = await User.find({
+      email: { $in: acceptedNotifs.map(n => n.from) }
+    }).lean();
+
+    const accepted = acceptedNotifs.map(n => {
+      const u = acceptedUsers.find(u => u.email === n.from);
+      return {
+        type: "accepted",
+        email: u?.email || n.from,
+        name: u?.name || n.from,
+        profilePic: u?.profilePic || null,
+        timestamp: n.timestamp
+      };
+    });
+
+    res.status(200).json({ requests, connections, accepted });
 
   } catch (err) {
     console.error("Notification fetch failed:", err);

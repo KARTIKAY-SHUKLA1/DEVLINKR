@@ -46,7 +46,14 @@ const DevChat = () => {
     path?.startsWith("http")
       ? path
       : `${import.meta.env.VITE_API_BASE_URL}${path}`;
-  const getProfilePhoto = (u) => (u?.profilePic ? getFullUrl(u.profilePic) : "/dp.png");
+
+  // ✅ Fixed getProfilePhoto with robust fallback
+  const getProfilePhoto = (u) => {
+    if (u?.profilePic && u.profilePic.trim() !== "") {
+      return getFullUrl(u.profilePic);
+    }
+    return "/dp.png";
+  };
 
   useEffect(() => {
     if (!user) return;
