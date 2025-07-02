@@ -12,34 +12,49 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
+// ✅ ALLOWED ORIGINS
+const allowedOrigins = [
+  "https://devlinkr-git-main-kartikay-shuklas-projects.vercel.app",
+  "https://devlinkr-tau.vercel.app",
+  "http://localhost:5173"
+];
+
+// ✅ SHARED CORS OPTIONS
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("CORS Not Allowed"));
+    }
+  },
+  credentials: true
+};
+
+// ✅ APPLY CORS TO EXPRESS
+app.use(cors(corsOptions));
+app.use(express.json());
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+// ✅ SOCKET.IO WITH SAME CORS
 const io = new Server(server, {
-  cors: {
-    origin: [
-      "https://devlinkr-git-main-kartikay-shuklas-projects.vercel.app",
-      "https://devlinkr-tau.vercel.app",
-      "http://localhost:5173"
-    ],
-    methods: ["GET", "POST"],
-    credentials: true
-  }
+  cors: corsOptions
 });
 
-// Global in-memory stores
-const connectedUsers = new Map(); // email -> socket.id
-const roomUsers = {}; // room -> [user names]
+// ✅ GLOBAL STORES
+const connectedUsers = new Map();
+const roomUsers = {};
 
 io.on("connection", (socket) => {
   console.log("🟢 Socket connected:", socket.id);
 
-  // Register user by email (chat)
+  // Register user for chat
   socket.on("register", (email) => {
     connectedUsers.set(email, socket.id);
     console.log("✅ Registered user:", email);
-
     io.emit("onlineUsers", Array.from(connectedUsers.keys()));
   });
 
-  // Typing indicator (chat)
   socket.on("typing", (receiverEmail) => {
     const receiverSocket = connectedUsers.get(receiverEmail);
     if (receiverSocket) {
@@ -48,10 +63,8 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Chat message send
   socket.on("sendMessage", async ({ to, messageData }) => {
     const receiverSocket = connectedUsers.get(to);
-
     if (receiverSocket) {
       try {
         await Message.findOneAndUpdate(
@@ -62,12 +75,10 @@ io.on("connection", (socket) => {
           },
           { status: "delivered" }
         );
-
         io.to(receiverSocket).emit("newMessage", {
           ...messageData,
           status: "delivered",
         });
-
         console.log(`📨 Message delivered to ${to}`);
       } catch (err) {
         console.error("Error updating delivery status:", err);
@@ -77,7 +88,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Seen status
   socket.on("markSeen", async ({ sender, receiver }) => {
     try {
       await Message.updateMany(
@@ -94,35 +104,29 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ✅ Join a pair programming room
+  // Pair programming
   socket.on("joinRoom", ({ room, name }) => {
     socket.join(room);
     console.log(`🛠️ ${name} (${socket.id}) joined room: ${room}`);
 
-    // Track users in room
     if (!roomUsers[room]) roomUsers[room] = [];
     if (!roomUsers[room].includes(name)) roomUsers[room].push(name);
 
-    // Send updated user list to everyone in room
     io.to(room).emit("joinedUsers", roomUsers[room]);
   });
 
-  // ✅ Handle code update (broadcast to others in room)
   socket.on("codeUpdate", ({ room, code }) => {
     socket.to(room).emit("codeUpdate", { room, code });
   });
 
-  // ✅ Cursor movement in editor
   socket.on("cursorMove", ({ room, position }) => {
     socket.to(room).emit("cursorMove", { position });
   });
 
-  // ✅ Typing indicator in PairProgramming chat
   socket.on("typing", ({ room, name }) => {
     socket.to(room).emit("userTyping", name);
   });
 
-  // ✅ Message in PairProgramming chat
   socket.on("newMessage", (msg) => {
     const { room } = msg;
     if (room) {
@@ -130,9 +134,7 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Handle disconnect
   socket.on("disconnect", () => {
-    // Remove from connectedUsers
     for (let [email, socketId] of connectedUsers.entries()) {
       if (socketId === socket.id) {
         connectedUsers.delete(email);
@@ -141,28 +143,13 @@ io.on("connection", (socket) => {
       }
     }
 
-    // Remove user from all rooms
     for (let room in roomUsers) {
-      // Note: without user-name mapping to socket id, we can't reliably remove disconnected user names
-      // This is a best-effort approach - you can improve by mapping socket.id -> username on join
       io.to(room).emit("joinedUsers", roomUsers[room]);
     }
 
     io.emit("onlineUsers", Array.from(connectedUsers.keys()));
   });
 });
-
-// Middleware
-app.use(cors({
-  origin: [
-    "https://devlinkr-git-main-kartikay-shuklas-projects.vercel.app",
-    "https://devlinkr-tau.vercel.app",
-    "http://localhost:5173"
-  ],
-  credentials: true
-}));
-app.use(express.json());
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Routes
 const authRoutes = require("./routes/auth");
@@ -183,12 +170,12 @@ mongoose
     process.exit(1);
   });
 
-// Root test route
+// Root
 app.get("/", (req, res) => {
   res.send("🚀 DevLinkr backend is running!");
 });
 
-// Server start
+// Start server
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🌐 Server running at http://localhost:${PORT}`);

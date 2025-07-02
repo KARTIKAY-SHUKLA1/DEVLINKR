@@ -9,19 +9,19 @@ const Notifications = () => {
   const [connections, setConnections] = useState([]);
 
   const fetchNotifications = async () => {
-    try {
-      await axiosInstance.get(`/api/auth/notifications?email=${user.email}`);
-      const reqs = res.data?.requests || [];
-      const cons = res.data?.connections || [];
+  try {
+    const res = await axiosInstance.get(`/api/auth/notifications?email=${user.email}`);
+    const reqs = res.data?.requests || [];
+    const cons = res.data?.connections || [];
 
-      setRequests(reqs);
-      setConnections(cons);
+    setRequests(reqs);
+    setConnections(cons);
 
-      localStorage.setItem("newNotifCount", reqs.length.toString());
-    } catch (err) {
-      console.error("Notification fetch error:", err);
-    }
-  };
+    localStorage.setItem("newNotifCount", reqs.length.toString());
+  } catch (err) {
+    console.error("Notification fetch error:", err);
+  }
+};
 
   const handleAccept = async (fromEmail) => {
     try {await axiosInstance.post("/api/auth/accept-request", {

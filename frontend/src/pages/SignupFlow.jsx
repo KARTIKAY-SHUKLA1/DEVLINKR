@@ -6,7 +6,6 @@ import Navbar from "../components/Navbar";
 
 const BASE_URL = import.meta.env.VITE_BACKEND_URL;
 
-
 const skillsOptions = [
   // Frontend
   { value: "html", label: "HTML" },
@@ -84,6 +83,7 @@ const skillsOptions = [
   { value: "langchain", label: "LangChain" },
   { value: "webrtc", label: "WebRTC" },
 ];
+
 const SignupFlow = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
@@ -246,19 +246,13 @@ const SignupFlow = () => {
 
           {step === 3 && (
             <>
-              {form.profilePhoto && (
-                <div className="flex justify-center">
-                  <img
-                    src={URL.createObjectURL(form.profilePhoto)}
-                    alt="Profile Preview"
-                    className="w-28 h-28 object-cover rounded-full shadow-lg mb-4 ring-4 ring-blue-300"
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = "/default-profile.png";
-                    }}
-                  />
-                </div>
-              )}
+              <div className="flex justify-center">
+                <img
+                  src={form.profilePhoto ? URL.createObjectURL(form.profilePhoto) : "/dp.png"}
+                  alt="Profile Preview"
+                  className="w-28 h-28 object-cover rounded-full shadow-lg mb-4 ring-4 ring-blue-300"
+                />
+              </div>
 
               <div>
                 <label className="text-sm text-gray-700 block mb-1">
