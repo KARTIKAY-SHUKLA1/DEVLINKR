@@ -83,16 +83,49 @@ router.post("/signup", upload.single("profilePhoto"), async (req, res) => {
       remark,
     } = req.body;
 
-    email = email.trim().toLowerCase();
+    email = email?.trim().toLowerCase();
 
-    // ✅ Correct skills parsing
+    // ✅ Robust skill parsing
     let skills = [];
     if (req.body.skills) {
-      try {
-        skills = JSON.parse(req.body.skills);
-        if (!Array.isArray(skills)) skills = [];
-      } catch {
-        skills = [];
+      if (Array.isArray(req.body.skills)) {
+        skills = req.body.skills.flatMap((item) => {
+          try {
+            const parsed = JSON.parse(item);
+            return Array.isArray(parsed) ? parsed : [parsed];
+          } catch {
+            return [item.trim()];
+          }
+        });
+      } else if (typeof req.body.skills === "string") {
+        try {
+          const parsed = JSON.parse(req.body.skills);
+          skills = Array.isArray(parsed) ? parsed : [parsed];
+        } catch {
+          skills = req.body.skills.split(",").map((s) => s.trim());
+        }
+      }
+    }
+
+    // ✅ Optional interest parsing
+    let interests = [];
+    if (req.body.interests) {
+      if (Array.isArray(req.body.interests)) {
+        interests = req.body.interests.flatMap((item) => {
+          try {
+            const parsed = JSON.parse(item);
+            return Array.isArray(parsed) ? parsed : [parsed];
+          } catch {
+            return [item.trim()];
+          }
+        });
+      } else if (typeof req.body.interests === "string") {
+        try {
+          const parsed = JSON.parse(req.body.interests);
+          interests = Array.isArray(parsed) ? parsed : [parsed];
+        } catch {
+          interests = req.body.interests.split(",").map((s) => s.trim());
+        }
       }
     }
 
@@ -118,6 +151,7 @@ router.post("/signup", upload.single("profilePhoto"), async (req, res) => {
       experience,
       remark,
       skills,
+      interests,
       profilePic: req.file ? req.file.path : undefined,
     });
 
@@ -130,6 +164,13 @@ router.post("/signup", upload.single("profilePhoto"), async (req, res) => {
       user: {
         name: newUser.name,
         email: newUser.email,
+        role: newUser.role,
+        college: newUser.college,
+        company: newUser.company,
+        github: newUser.github,
+        experience: newUser.experience,
+        skills: newUser.skills,
+        interests: newUser.interests,
         profilePic: newUser.profilePic,
       },
       redirectTo: "/home",
@@ -142,6 +183,7 @@ router.post("/signup", upload.single("profilePhoto"), async (req, res) => {
     });
   }
 });
+
 
 // ------------------ Login ------------------
 router.post("/login", async (req, res) => {
