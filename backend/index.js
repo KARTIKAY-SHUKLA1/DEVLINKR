@@ -15,8 +15,8 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: [
-      "https://devlinkr-git-main-kartikay-shuklas-projects.vercel.app/",   // ✅ Add your real Vercel frontend URL
-      "http://localhost:5173"                  // ✅ For local development
+      "https://devlinkr-git-main-kartikay-shuklas-projects.vercel.app",
+      "http://localhost:5173"
     ],
     methods: ["GET", "POST"]
   }
@@ -151,7 +151,12 @@ io.on("connection", (socket) => {
 });
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [
+    "https://devlinkr-git-main-kartikay-shuklas-projects.vercel.app",
+    "http://localhost:5173"
+  ]
+}));
 app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 

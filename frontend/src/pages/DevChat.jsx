@@ -3,7 +3,10 @@ import io from "socket.io-client";
 import api from "../api";
 import { useNavigate } from "react-router-dom";
 
-const socket = io(import.meta.env.VITE_API_BASE_URL, { withCredentials: true });
+export const socket = io("https://devlinkr.onrender.com", {
+  transports: ["websocket"],
+  withCredentials: true,
+});
 
 const DevChat = () => {
   const navigate = useNavigate();
