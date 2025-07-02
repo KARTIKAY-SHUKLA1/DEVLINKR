@@ -16,6 +16,7 @@ const io = new Server(server, {
   cors: {
     origin: [
       "https://devlinkr-git-main-kartikay-shuklas-projects.vercel.app",
+      "https://devlinkr-tau.vercel.app",
       "http://localhost:5173"
     ],
     methods: ["GET", "POST"],
@@ -155,6 +156,7 @@ io.on("connection", (socket) => {
 app.use(cors({
   origin: [
     "https://devlinkr-git-main-kartikay-shuklas-projects.vercel.app",
+    "https://devlinkr-tau.vercel.app",
     "http://localhost:5173"
   ],
   credentials: true
