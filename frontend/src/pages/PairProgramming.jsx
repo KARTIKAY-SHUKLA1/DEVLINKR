@@ -7,7 +7,7 @@ import axiosInstance from "../utils/axiosInstance";
 import { FaFile } from "react-icons/fa";
 import EmojiPicker from "emoji-picker-react";
 
-const socket = io(import.meta.env.VITE_BACKEND_URL);
+const socket = io(import.meta.env.VITE_API_BASE_URL, { withCredentials: true });
 
 // ⚙️ Judge0 API Config
 const JUDGE0_API =

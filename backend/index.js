@@ -14,9 +14,12 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
-    methods: ["GET", "POST"],
-  },
+    origin: [
+      "https://devlinkr-git-main-kartikay-shuklas-projects.vercel.app/",   // ✅ Add your real Vercel frontend URL
+      "http://localhost:5173"                  // ✅ For local development
+    ],
+    methods: ["GET", "POST"]
+  }
 });
 
 // Global in-memory stores

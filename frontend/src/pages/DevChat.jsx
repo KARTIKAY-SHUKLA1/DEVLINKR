@@ -3,7 +3,7 @@ import io from "socket.io-client";
 import api from "../api";
 import { useNavigate } from "react-router-dom";
 
-const socket = io(import.meta.env.VITE_API_BASE_URL);
+const socket = io(import.meta.env.VITE_API_BASE_URL, { withCredentials: true });
 
 const DevChat = () => {
   const navigate = useNavigate();
