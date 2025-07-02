@@ -375,11 +375,21 @@ router.get("/notifications", async (req, res) => {
 });
 
 // ------------------ Matching ------------------
+
 router.get("/match", async (req, res) => {
   const { email } = req.query;
   try {
     const currentUser = await User.findOne({ email });
     if (!currentUser) return res.status(404).json({ msg: "User not found" });
+
+    // Defensive check for skills/interests
+    const userSkills = Array.isArray(currentUser.skills)
+      ? currentUser.skills.map((s) => s.toLowerCase())
+      : [];
+
+    const userInterests = Array.isArray(currentUser.interests)
+      ? currentUser.interests.map((i) => i.toLowerCase())
+      : [];
 
     const exclude = new Set([
       currentUser.email,
@@ -388,18 +398,26 @@ router.get("/match", async (req, res) => {
     ]);
 
     const incomingRequests = await User.find({ connectionRequests: email });
-    incomingRequests.forEach(u => exclude.add(u.email));
+    incomingRequests.forEach((u) => exclude.add(u.email));
 
     const others = await User.find({ email: { $nin: [...exclude] } });
     const matches = others
-      .map(user => {
-        const skillMatch = user.skills?.filter(s => currentUser.skills.includes(s)).length || 0;
-        const interestMatch = user.interests?.filter(i => currentUser.interests.includes(i)).length || 0;
+      .map((user) => {
+        const skillMatch = Array.isArray(user.skills)
+          ? user.skills.filter((s) => userSkills.includes(s.toLowerCase())).length
+          : 0;
+
+        const interestMatch = Array.isArray(user.interests)
+          ? user.interests.filter((i) => userInterests.includes(i.toLowerCase())).length
+          : 0;
+
         return { user, score: skillMatch + interestMatch };
       })
-      .filter(e => e.score > 0);
+      .filter((e) => e.score > 0);
 
-    if (matches.length === 0) return res.status(404).json({ msg: "No suitable match found" });
+    if (matches.length === 0) {
+      return res.status(404).json({ msg: "No suitable match found" });
+    }
 
     const bestMatch = matches[Math.floor(Math.random() * matches.length)].user;
 
@@ -409,13 +427,14 @@ router.get("/match", async (req, res) => {
       role: bestMatch.role,
       college: bestMatch.college,
       company: bestMatch.company,
-      skills: bestMatch.skills,
-      interests: bestMatch.interests,
+      skills: bestMatch.skills || [],
+      interests: bestMatch.interests || [],
       availability: bestMatch.availability,
       github: bestMatch.github,
       profilePic: bestMatch.profilePic || null,
     });
   } catch (err) {
+    console.error("❌ Error in /match route:", err);
     res.status(500).json({ msg: "Server error" });
   }
 });
