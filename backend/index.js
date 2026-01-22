@@ -41,6 +41,14 @@ const io = new Server(server, {
   cors: corsOptions
 });
 
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "OK",
+    uptime: process.uptime(),
+    message: "DevLinkr backend healthy"
+  });
+});
+
 // ✅ GLOBAL STORES
 const connectedUsers = new Map();
 const roomUsers = {};
