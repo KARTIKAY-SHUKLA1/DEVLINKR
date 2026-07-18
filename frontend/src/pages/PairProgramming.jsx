@@ -44,6 +44,9 @@ const PairProgramming = () => {
   const otherCursorDecoration = useRef([]);
   const isRemoteChange = useRef(false);
   const autoSaveInterval = useRef(null);
+  // Debounce timer for codeUpdate socket emit (300ms).
+  // Avoids emitting on every keystroke — fires only after the user pauses.
+  const debounceTimer = useRef(null);
 
   const user = JSON.parse(localStorage.getItem("user")) || { name: "Guest" };
 
@@ -123,7 +126,14 @@ const PairProgramming = () => {
       return;
     }
     setCode(value);
-    socket.emit("codeUpdate", { room, code: value });
+
+    // Debounce the socket emit: clear any pending timer and schedule a new
+    // one 300ms out. The socket only fires if the user stops typing for 300ms,
+    // cutting socket traffic dramatically during rapid keystrokes.
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      socket.emit("codeUpdate", { room, code: value });
+    }, 300);
 
     setSaveStatus("Saving...");
     setTimeout(() => setSaveStatus("Saved"), 1000);

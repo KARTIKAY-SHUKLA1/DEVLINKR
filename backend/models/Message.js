@@ -25,5 +25,14 @@ const messageSchema = new mongoose.Schema(
   { timestamps: true } // Adds createdAt and updatedAt
 );
 
+// ─── Explicit Indexes ────────────────────────────────────────────────────────
+// Chat history: queries always filter by (sender, receiver) pair and sort by
+// createdAt. The compound index covers both in a single IXSCAN.
+messageSchema.index({ sender: 1, receiver: 1, createdAt: 1 });
+
+// Unseen count: the /notifications endpoint counts unseen messages per receiver.
+// This index avoids a full collection scan for every connection in the list.
+messageSchema.index({ receiver: 1, status: 1 });
+
 const Message = mongoose.model("Message", messageSchema);
 module.exports = Message;

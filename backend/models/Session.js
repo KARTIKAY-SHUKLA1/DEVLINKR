@@ -11,4 +11,10 @@ const sessionSchema = new mongoose.Schema(
   }
 );
 
+// ─── Explicit Indexes ────────────────────────────────────────────────────────
+// Note: room already has an index via unique:true on the schema field above.
+// updatedAt: used to sort sessions by most-recently-active (future list view).
+// Descending (-1) index matches the typical "ORDER BY updatedAt DESC" pattern.
+sessionSchema.index({ updatedAt: -1 });
+
 module.exports = mongoose.model("Session", sessionSchema);

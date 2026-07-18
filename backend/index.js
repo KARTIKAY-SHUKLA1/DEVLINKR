@@ -7,6 +7,18 @@ const http = require("http");
 const { Server } = require("socket.io");
 const Message = require("./models/Message");
 
+// ─── Redis + BullMQ ───────────────────────────────────────────────────────────
+// Import the shared Redis client first so it connects before anything else uses it.
+const redis = require("./utils/redis");
+
+// Importing sessionQueue also boots the BullMQ Worker — the worker starts
+// listening for jobs as soon as this module is required.
+const { sessionQueue, sessionWorker } = require("./queues/sessionQueue");
+
+
+// ─── Rate Limiter ─────────────────────────────────────────────────────────────
+const { roomLimiter } = require("./middleware/rateLimiter");
+
 dotenv.config();
 
 const app = express();
@@ -41,6 +53,7 @@ const io = new Server(server, {
   cors: corsOptions
 });
 
+// ─── Health Check ─────────────────────────────────────────────────────────────
 app.get("/health", (req, res) => {
   res.status(200).json({
     status: "OK",
@@ -49,10 +62,51 @@ app.get("/health", (req, res) => {
   });
 });
 
-// ✅ GLOBAL STORES
-const connectedUsers = new Map();
-const roomUsers = {};
+// ─── Redis Presence Helpers ───────────────────────────────────────────────────
+// Room presence is stored in Redis as a Set per room.
+// Key pattern:  room:{roomId}:users
+// This survives server restarts and scales across multiple server instances,
+// unlike the old in-memory roomUsers object.
 
+const ROOM_KEY = (roomId) => `room:${roomId}:users`;
+
+async function addUserToRoom(roomId, name) {
+  await redis.sadd(ROOM_KEY(roomId), name);
+}
+
+async function removeUserFromRoom(roomId, name) {
+  await redis.srem(ROOM_KEY(roomId), name);
+}
+
+async function getUsersInRoom(roomId) {
+  return redis.smembers(ROOM_KEY(roomId));
+}
+
+// ─── In-memory map: socketId → { email, rooms[] } ────────────────────────────
+// Still in-memory for the direct-message chat (unchanged behaviour).
+const connectedUsers = new Map();
+
+// Map socketId → list of rooms joined (needed for cleanup on disconnect)
+const socketRooms = new Map();
+
+// ─── REST endpoint: online users in a room ────────────────────────────────────
+/**
+ * GET /rooms/:roomId/online-users
+ * Returns the list of users currently present in the given collaborative room.
+ * Backed by Redis — accurate across restarts / horizontal scaling.
+ */
+app.get("/rooms/:roomId/online-users", roomLimiter, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const users = await getUsersInRoom(roomId);
+    res.json({ roomId, onlineUsers: users, count: users.length });
+  } catch (err) {
+    console.error("❌ Error fetching room users:", err.message);
+    res.status(500).json({ msg: "Failed to fetch online users" });
+  }
+});
+
+// ─── Socket.IO ────────────────────────────────────────────────────────────────
 io.on("connection", (socket) => {
   console.log("🟢 Socket connected:", socket.id);
 
@@ -112,15 +166,25 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Pair programming
-  socket.on("joinRoom", ({ room, name }) => {
+  // ─── Pair programming — Redis-backed presence ──────────────────────────────
+  socket.on("joinRoom", async ({ room, name }) => {
     socket.join(room);
     console.log(`🛠️ ${name} (${socket.id}) joined room: ${room}`);
 
-    if (!roomUsers[room]) roomUsers[room] = [];
-    if (!roomUsers[room].includes(name)) roomUsers[room].push(name);
+    // Track which rooms this socket is in (for cleanup on disconnect)
+    if (!socketRooms.has(socket.id)) socketRooms.set(socket.id, []);
+    const rooms = socketRooms.get(socket.id);
+    if (!rooms.includes(room)) rooms.push(room);
 
-    io.to(room).emit("joinedUsers", roomUsers[room]);
+    // Store the user's name on the socket so disconnect can clean it up
+    socket.data.name = name;
+
+    // Persist to Redis
+    await addUserToRoom(room, name);
+
+    // Broadcast updated user list
+    const users = await getUsersInRoom(room);
+    io.to(room).emit("joinedUsers", users);
   });
 
   socket.on("codeUpdate", ({ room, code }) => {
@@ -142,7 +206,9 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("disconnect", () => {
+  // ─── Disconnect: clean up Redis presence ──────────────────────────────────
+  socket.on("disconnect", async () => {
+    // Clean up chat user map
     for (let [email, socketId] of connectedUsers.entries()) {
       if (socketId === socket.id) {
         connectedUsers.delete(email);
@@ -151,19 +217,29 @@ io.on("connection", (socket) => {
       }
     }
 
-    for (let room in roomUsers) {
-      io.to(room).emit("joinedUsers", roomUsers[room]);
+    // Remove from Redis room sets and notify each room
+    const rooms = socketRooms.get(socket.id) || [];
+    const name  = socket.data.name;
+    if (name) {
+      await Promise.all(
+        rooms.map(async (room) => {
+          await removeUserFromRoom(room, name);
+          const users = await getUsersInRoom(room);
+          io.to(room).emit("joinedUsers", users);
+        })
+      );
     }
+    socketRooms.delete(socket.id);
 
     io.emit("onlineUsers", Array.from(connectedUsers.keys()));
   });
 });
 
-// Routes
+// ─── API Routes ───────────────────────────────────────────────────────────────
 const authRoutes = require("./routes/auth");
 app.use("/api/auth", authRoutes);
 
-// MongoDB connection
+// ─── MongoDB connection ───────────────────────────────────────────────────────
 const MONGO_URI = process.env.MONGO_URI;
 if (!MONGO_URI) {
   console.error("❌ MONGO_URI missing in .env");
@@ -178,12 +254,13 @@ mongoose
     process.exit(1);
   });
 
+
 // Root
 app.get("/", (req, res) => {
   res.send("🚀 DevLinkr backend is running!");
 });
 
-// Start server
+// ─── Start server ─────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🌐 Server running at http://localhost:${PORT}`);

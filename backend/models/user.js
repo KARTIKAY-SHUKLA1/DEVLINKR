@@ -42,4 +42,11 @@ const userSchema = new mongoose.Schema({
   }
 });
 
+// ─── Explicit Indexes ────────────────────────────────────────────────────────
+// skills: used for matching — queries filter/score by skill overlap.
+// An index on the array field lets MongoDB use IXSCAN instead of COLLSCAN.
+userSchema.index({ skills: 1 });
+// Note: email already has an index via unique:true on the schema field above.
+// skills is the key new index enabling efficient matching queries.
+
 module.exports = mongoose.model("User", userSchema);
