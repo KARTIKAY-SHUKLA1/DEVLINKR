@@ -84,9 +84,12 @@ const DevChat = () => {
         const res = await api.get(`/api/auth/chat-history`, {
           params: { user1: user.email, user2: selectedUser.email },
         });
-        setMessages(res.data);
 
-        const unseenMessages = res.data.filter(
+        // chat-history returns { messages: [...], nextCursor } — extract the array
+        const history = Array.isArray(res.data.messages) ? res.data.messages : [];
+        setMessages(history);
+
+        const unseenMessages = history.filter(
           (m) => m.receiver === user.email && m.status !== "seen"
         );
         if (unseenMessages.length > 0) {
