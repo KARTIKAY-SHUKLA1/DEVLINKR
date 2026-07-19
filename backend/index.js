@@ -24,23 +24,45 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-// ✅ ALLOWED ORIGINS
-const allowedOrigins = [
-  "https://devlinkr-git-main-kartikay-shuklas-projects.vercel.app",
-  "https://devlinkr-tau.vercel.app",
-  "http://localhost:5173"
-];
+// ─── CORS ─────────────────────────────────────────────────────────────────────
+// The stable Vercel production URL is always allowed regardless of env.
+// FRONTEND_URL can override/extend this for staging or custom domains.
+const STABLE_PROD_URL = "https://devlinkr-tau.vercel.app";
+const FRONTEND_URL    = process.env.FRONTEND_URL || STABLE_PROD_URL;
 
-// ✅ SHARED CORS OPTIONS
+/**
+ * Returns true for any origin that should be allowed.
+ *
+ * Permitted:
+ *  • No origin at all      — curl, Postman, server-to-server
+ *  • STABLE_PROD_URL       — always-on Vercel production domain
+ *  • FRONTEND_URL          — additional origin from env (staging, custom domain)
+ *  • Preview deploy URLs   — pattern: *-kartikay-shuklas-projects.vercel.app
+ *  • http://localhost:5173 — Vite dev server
+ *  • http://localhost:5000 — local backend (Postman via browser)
+ */
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  if (origin === STABLE_PROD_URL) return true;
+  if (origin === FRONTEND_URL) return true;
+  if (origin === "http://localhost:5173") return true;
+  if (origin === "http://localhost:5000") return true;
+  // Matches every Vercel preview URL for this project, e.g.:
+  //   https://devlinkr-19wehye5a-kartikay-shuklas-projects.vercel.app
+  if (/^https:\/\/.+-kartikay-shuklas-projects\.vercel\.app$/.test(origin)) return true;
+  return false;
+}
+
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (isAllowedOrigin(origin)) {
       callback(null, true);
     } else {
-      callback(new Error("CORS Not Allowed"));
+      console.warn(`⛔ CORS blocked origin: ${origin}`);
+      callback(new Error(`CORS policy: origin not allowed — ${origin}`));
     }
   },
-  credentials: true
+  credentials: true,
 };
 
 // ✅ APPLY CORS TO EXPRESS
