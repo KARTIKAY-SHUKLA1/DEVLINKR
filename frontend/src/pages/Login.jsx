@@ -3,17 +3,18 @@ import { useNavigate } from "react-router-dom";
 import axiosInstance from "../utils/axiosInstance";
 import Navbar from "../components/Navbar";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/solid";
+import { useAuth } from "../context/AuthContext";
 
 const Login = () => {
   const navigate = useNavigate();
+  const { login, token } = useAuth();
   const [form, setForm] = useState({ email: "", password: "" });
   const [message, setMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
     if (token) navigate("/home");
-  }, [navigate]);
+  }, [token, navigate]);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -24,10 +25,13 @@ const Login = () => {
     setMessage("");
     try {
       const res = await axiosInstance.post("/api/auth/login", form);
-      const { token, user } = res.data;
+      const { token: newToken, user, refreshToken } = res.data;
 
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify(user));
+      // Store refresh token separately
+      if (refreshToken) localStorage.setItem("refreshToken", refreshToken);
+
+      // Update global Context state (Context also updates localStorage internally)
+      login(newToken, user);
 
       setMessage("✅ Login successful!");
       setTimeout(() => navigate("/home"), 800);

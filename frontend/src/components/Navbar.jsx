@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import api from "../api";
 import notifSound from "../assets/de9b387f-3cba-4a1c-b66c-44974a312ac4.mp3";
 import io from "socket.io-client";
+import { useAuth } from "../context/AuthContext";
 
 // ✅ Set up socket connection
 const socket = io(import.meta.env.VITE_API_BASE_URL, {
@@ -13,8 +14,9 @@ const socket = io(import.meta.env.VITE_API_BASE_URL, {
 const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, token, logout } = useAuth();
 
-  const isLoggedIn = !!localStorage.getItem("token");
+  const isLoggedIn = !!token;
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
   const [newMessageCount, setNewMessageCount] = useState(0);
@@ -22,7 +24,6 @@ const Navbar = () => {
   const audio = useRef(new Audio(notifSound));
 
   const fetchNotificationCount = async () => {
-    const user = JSON.parse(localStorage.getItem("user"));
     if (!user || !user.email) return;
 
     try {
@@ -45,7 +46,7 @@ const Navbar = () => {
   };
 
   const handleLogout = () => {
-    localStorage.clear();
+    logout();       // clears localStorage + resets Context state
     navigate("/login");
   };
 

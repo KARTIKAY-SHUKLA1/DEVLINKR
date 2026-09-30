@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext.jsx';
 
 // Pages
 import Home from './pages/Home.jsx';
@@ -23,8 +24,9 @@ import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <Routes>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
         {/* 🔓 DevLinkr Public Routes */}
         <Route path="/" element={<Home />} />
         <Route path="/signup" element={<SignupFlow />} />
@@ -70,6 +72,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           }
         />
       </Routes>
-    </BrowserRouter>
+      </BrowserRouter>
+    </AuthProvider>
   </React.StrictMode>
 );

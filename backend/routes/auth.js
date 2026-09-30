@@ -204,9 +204,19 @@ router.post("/login", authLimiter, async (req, res) => {
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(400).json({ msg: "Wrong password" });
 
-    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "7d" });
+    // Short-lived access token (15 minutes)
+    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "15m" });
+
+    // Long-lived refresh token (7 days) — used to get new access tokens silently
+    const refreshToken = jwt.sign(
+      { id: user._id },
+      process.env.REFRESH_TOKEN_SECRET || JWT_SECRET + "_refresh",
+      { expiresIn: "7d" }
+    );
+
     res.json({
       token,
+      refreshToken,
       user: {
         id:           user._id,
         name:         user.name,
@@ -227,6 +237,38 @@ router.post("/login", authLimiter, async (req, res) => {
   } catch (err) {
     console.error("❌ Login error:", err);
     res.status(500).json({ msg: "Server error" });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// REFRESH TOKEN
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /refresh
+ * Called by the frontend axios interceptor when a 401 is received.
+ * Verifies the refreshToken, issues a new short-lived access token.
+ */
+router.post("/refresh", async (req, res) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return res.status(401).json({ msg: "No refresh token provided" });
+  }
+
+  try {
+    const REFRESH_SECRET = process.env.REFRESH_TOKEN_SECRET || JWT_SECRET + "_refresh";
+
+    // Verify the refresh token — throws if expired or invalid
+    const decoded = jwt.verify(refreshToken, REFRESH_SECRET);
+
+    // Issue a fresh access token (15 minutes)
+    const newAccessToken = jwt.sign({ id: decoded.id }, JWT_SECRET, { expiresIn: "15m" });
+
+    res.json({ token: newAccessToken });
+  } catch (err) {
+    console.error("❌ Refresh token error:", err.message);
+    return res.status(401).json({ msg: "Refresh token expired or invalid. Please log in again." });
   }
 });
 
